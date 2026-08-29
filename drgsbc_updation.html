@@ -1,0 +1,1158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DRGSBC — Updation</title>
+
+<script src="drgsbc_theme_sync.js"></script>
+<link rel="stylesheet" href="drgsbc_shared_theme.css">
+<link rel="stylesheet" href="core/theme.css">
+
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=Share+Tech+Mono&family=Exo+2:wght@300;400;600;700&display=swap" rel="stylesheet">
+
+<style>
+*{box-sizing:border-box;}
+body{margin:0;min-height:100vh;font-family:'Exo 2',sans-serif;}
+
+.topbar{
+  position:sticky;top:0;z-index:50;
+  background:var(--topbar-bg);
+  border-bottom:1px solid var(--border);
+  padding:14px 22px;
+  box-shadow:var(--shadow-blue);
+  display:flex;align-items:center;gap:18px;flex-wrap:wrap;
+}
+html.embedded .topbar{ display:none; }
+.topbar h1{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:18px;letter-spacing:3px;margin:0;color:var(--text-primary);white-space:nowrap;}
+.topbar h1 span{color:var(--accent-cyan);}
+.topbar .sub{font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--text-muted);letter-spacing:1px;}
+.session-badge{margin-left:auto;font-family:'Share Tech Mono',monospace;font-size:10px;letter-spacing:1px;color:var(--text-muted);white-space:nowrap;}
+.page-wrap{padding:22px;width:96%;margin:0 auto;}
+
+/* ── Sub-tab system (same classes as v16's own utabs, copied verbatim) ── */
+.settings-container{background:var(--settings-bg);border:1px solid var(--border);padding:0;}
+.settings-tabs{display:flex;border-bottom:1px solid var(--border);flex-wrap:wrap;}
+.stab{background:transparent;border:none;border-bottom:2px solid transparent;color:var(--text-muted);font-family:Rajdhani,sans-serif;font-weight:600;font-size:13px;letter-spacing:2px;padding:14px 24px;cursor:pointer;transition:all 0.2s;margin-bottom:-1px;}
+.stab:hover{color:var(--text-secondary);}
+.stab.active{color:var(--accent-blue);border-bottom-color:var(--accent-blue);}
+.stab:disabled{opacity:0.35;cursor:default;}
+.stab:disabled:hover{color:var(--text-muted);}
+.settings-body{padding:24px;}
+.stab-content{display:none;}.stab-content.active{display:block;}
+.settings-section{margin-bottom:28px;}
+.settings-section-title{font-family:Rajdhani,sans-serif;font-weight:600;font-size:13px;letter-spacing:2px;color:var(--text-muted);margin-bottom:14px;padding-bottom:8px;border-bottom:1px solid var(--border);}
+.filter-grid{display:grid;gap:12px;align-items:end;}
+
+.coming-soon{text-align:center;padding:60px 20px;}
+.coming-soon-icon{font-size:34px;margin-bottom:14px;opacity:0.25;}
+.coming-soon-text{font-family:Rajdhani,sans-serif;font-size:16px;letter-spacing:2px;color:var(--text-muted);}
+.coming-soon-sub{font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--text-muted);margin-top:8px;letter-spacing:1px;opacity:0.6;max-width:420px;margin-left:auto;margin-right:auto;line-height:1.6;}
+
+.badge{display:inline-block;font-family:'Share Tech Mono',monospace;font-size:8px;letter-spacing:1px;padding:2px 7px;border-radius:2px;}
+.empty-state{text-align:center;padding:50px 20px;}
+.empty-icon{font-size:32px;margin-bottom:10px;opacity:0.25;}
+.empty-text{font-family:'Share Tech Mono',monospace;font-size:11px;color:var(--text-muted);letter-spacing:2px;}
+
+/* ── Process tab: filter panel / form controls (copied verbatim from v16) ── */
+.form-group{margin-bottom:0;}
+.form-label{display:block;font-family:'Share Tech Mono',monospace;font-size:9px;letter-spacing:2px;color:var(--text-muted);margin-bottom:6px;}
+.form-input{width:100%;background:var(--input-bg);border:1px solid var(--border);color:var(--text-primary);font-family:'Exo 2',sans-serif;font-size:13px;padding:9px 12px;outline:none;transition:border-color 0.2s;box-sizing:border-box;}
+.form-input:focus{border-color:var(--accent-blue);}
+.filter-select{width:100%;background:var(--select-bg);border:1px solid var(--border);color:var(--text-primary);font-family:'Exo 2',sans-serif;font-size:12px;padding:8px 28px 8px 10px;outline:none;cursor:pointer;transition:border-color 0.2s;appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%234a7a9b'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 9px center;box-sizing:border-box;}
+.filter-select:focus,.filter-select:hover{border-color:var(--accent-blue);}
+.filter-select option{background:var(--bg-panel);}
+.btn-fetch{background:var(--accent-blue);border:none;color:var(--bg-dark);font-family:Rajdhani,sans-serif;font-weight:700;font-size:12px;letter-spacing:2px;padding:8px 18px;cursor:pointer;transition:background 0.2s;white-space:nowrap;}
+.btn-fetch:hover{background:var(--accent-cyan);}
+.btn-fetch:disabled{opacity:0.5;cursor:default;}
+.btn-warn{background:transparent;border:1px solid var(--accent-gold);color:var(--accent-gold);font-family:Rajdhani,sans-serif;font-weight:600;font-size:12px;letter-spacing:1px;padding:8px 16px;cursor:pointer;transition:all .2s;white-space:nowrap;}
+.btn-warn:hover{background:var(--accent-gold);color:var(--bg-dark);}
+.btn-warn.sm{font-size:11px;padding:5px 12px;}
+.loading-bar{height:2px;background:linear-gradient(90deg,var(--accent-blue),var(--accent-cyan),var(--accent-blue));background-size:200% 100%;animation:loading 1.2s linear infinite;display:none;}
+.loading-bar.show{display:block;}
+@keyframes loading{0%{background-position:200% 0;}100%{background-position:-200% 0;}}
+@keyframes modalin{from{opacity:0;transform:translateY(-16px) scale(0.97);}to{opacity:1;transform:none;}}
+
+/* ── Process → Procurement: editable grid ── */
+table{border-collapse:collapse;}
+.pd-ro{padding:7px 8px;color:var(--text-secondary);white-space:nowrap;font-size:11px;border-bottom:1px solid rgba(26,58,92,.3);vertical-align:middle;}
+.pd-ro.muted{color:var(--text-muted);font-family:'Share Tech Mono',monospace;font-size:9px;}
+.pd-inp{background:var(--bg-dark);border:1px solid var(--border);color:var(--text-primary);font-family:'Exo 2',sans-serif;font-size:11px;padding:5px 7px;outline:none;transition:border-color .15s;width:100%;min-width:100px;box-sizing:border-box;}
+.pd-inp:focus{border-color:var(--accent-blue);}
+.pd-inp.dirty{border-color:var(--accent-gold)!important;background:rgba(255,214,10,0.04);}
+.pd-inp[type=date]{min-width:130px;}
+
+.pd-loapo-wrap{display:flex;align-items:center;gap:4px;min-width:0;}
+.pd-loapo-wrap .pd-inp{flex:1;min-width:0;}
+.pd-loapo-doc-icon{
+  flex:none;width:18px;height:18px;display:flex;align-items:center;justify-content:center;
+  border-radius:3px;color:var(--text-muted);opacity:.4;pointer-events:none;transition:background .15s,color .15s,opacity .15s;
+}
+.pd-loapo-doc-icon svg{width:13px;height:13px;}
+.pd-loapo-doc-icon.pd-loapo-on{color:var(--accent-green);opacity:1;pointer-events:auto;cursor:pointer;}
+.pd-loapo-doc-icon.pd-loapo-on:hover{background:rgba(6,214,160,0.15);}
+
+input[type="date"]{color-scheme:dark;}
+input[type="date"]::-webkit-datetime-edit{color:var(--text-primary);opacity:1;}
+input[type="date"].pd-date-empty::-webkit-datetime-edit{color:var(--text-muted);opacity:0.5;}
+.pd-cell{padding:4px 6px;vertical-align:middle;border-bottom:1px solid rgba(26,58,92,.3);}
+.pd-cell.edit{background:rgba(0,180,216,0.02);}
+tbody tr:hover .pd-ro,tbody tr:hover .pd-cell{background:rgba(0,180,216,0.03);}
+.pd-edit-h{color:var(--accent-cyan)!important;}
+.field-dirty   { border-color: var(--accent-gold)  !important; box-shadow: 0 0 0 2px rgba(251,191,36,0.2)  !important; transition: border-color 0.2s, box-shadow 0.2s; }
+.field-success { border-color: var(--accent-green) !important; box-shadow: 0 0 0 2px rgba(16,185,129,0.25) !important; transition: border-color 0.2s, box-shadow 0.2s; }
+.field-error   { border-color: var(--accent-red)   !important; box-shadow: 0 0 0 2px rgba(239,68,68,0.25)  !important; transition: border-color 0.2s, box-shadow 0.2s; }
+.pd-col-toggle{display:flex;align-items:center;gap:7px;font-family:'Exo 2',sans-serif;font-size:11px;color:var(--text-secondary);cursor:pointer;white-space:nowrap;}
+.pd-col-toggle input[type="checkbox"]{accent-color:var(--accent-cyan);cursor:pointer;flex-shrink:0;width:13px;height:13px;margin:0;}
+/* Same opacity-correction as thead .pd-frozen below, but for EVERY
+   header cell — not just the frozen ones. The frozen-only version
+   left regular header cells (Tender Called On, Stage, Vendor Name,
+   LOA/PO etc.) relying solely on the parent <tr>'s near-transparent
+   inline background, which let scrolled row content bleed through
+   and become illegible underneath the sticky header. */
+thead .pd-th{background-color:var(--bg-panel);background-image:linear-gradient(var(--table-head-bg),var(--table-head-bg));}
+.f-select{background:var(--select-bg);border:1px solid var(--border);color:var(--text-primary);font-family:'Exo 2',sans-serif;font-size:12px;padding:8px 28px 8px 10px;outline:none;cursor:pointer;transition:border-color .2s;appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%234a7a9b'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 9px center;width:100%;}
+.f-select:focus,.f-select:hover{border-color:var(--accent-blue);}
+.f-select option{background:var(--bg-panel);}
+/* Edit Sanction: hide LIVE ESTIMATE/SUBMITTED ON/VETTED ON columns
+   unless "EDIT ESTIMATE" is checked. */
+#es_items_table.es-hide-estimate th:nth-child(10),
+#es_items_table.es-hide-estimate th:nth-child(11),
+#es_items_table.es-hide-estimate th:nth-child(12),
+#es_items_table.es-hide-estimate td:nth-child(10),
+#es_items_table.es-hide-estimate td:nth-child(11),
+#es_items_table.es-hide-estimate td:nth-child(12){display:none;}
+.btn-save-settings{background:var(--accent-blue);border:none;color:var(--bg-dark);font-family:Rajdhani,sans-serif;font-weight:700;font-size:13px;letter-spacing:2px;padding:10px 24px;cursor:pointer;transition:opacity 0.2s;}
+.btn-save-settings:hover{opacity:0.85;}
+.btn-save-settings:disabled{opacity:0.5;cursor:default;}
+.table-wrapper{overflow-x:auto;}
+.btn-icon{background:transparent;border:1px solid var(--border);color:var(--text-secondary);font-family:'Share Tech Mono',monospace;font-size:9px;letter-spacing:1px;padding:4px 9px;cursor:pointer;border-radius:3px;transition:all .15s;white-space:nowrap;}
+.btn-icon:hover{border-color:var(--accent-blue);color:var(--accent-blue);}
+.btn-icon.red{border-color:rgba(255,56,96,0.3);color:var(--accent-red);}
+.btn-icon.red:hover{border-color:var(--accent-red);background:rgba(255,56,96,0.08);}
+
+/* ── My Space ── */
+.ms-stat-card{background:var(--bg-card);border:1px solid var(--border);padding:14px;text-align:center;cursor:pointer;transition:border-color 0.2s;}
+.pd-th{font-family:'Share Tech Mono',monospace;font-size:8px;letter-spacing:1px;color:var(--accent-blue);padding:9px 8px;text-align:left;white-space:nowrap;font-weight:400;}
+/* Frozen (sticky-left) columns — Sub-Item Name/Qty/Latest Cost are
+   always frozen; Remarks/Stage/Unit Price/Consignee Depot/Next
+   Process Due On/Owner-SSE/Process PDC freeze automatically whenever
+   toggled visible. Pending With is mandatory (always shown) but is
+   NOT in the frozen set — it scrolls with the rest. Solid background
+   is required on frozen cells (not the usual translucent .pd-cell.edit
+   tint) so scrolled-away columns don't visually bleed through
+   underneath. Actual `left` offsets are computed in JS
+   (pdComputeFrozenOffsets) since which optional columns are visible
+   changes the cumulative stack; `left` comes from an injected
+   <style> tag, not from here. */
+.pd-frozen{position:sticky;z-index:5;background:var(--bg-panel);}
+/* --table-head-bg is a deliberately subtle ~6-8% opacity tint, fine for
+   a static table header that nothing scrolls behind. The Process tab's
+   headers are sticky with rows scrolling directly underneath them, so
+   that same near-transparent tint let scrolled body text bleed through
+   and visually mix with the header — layering it as a background-image
+   on top of the actual solid panel color keeps the same tint look while
+   staying fully opaque. */
+thead .pd-frozen{z-index:11;background-color:var(--bg-panel);background-image:linear-gradient(var(--table-head-bg),var(--table-head-bg));}
+th[data-col="slno"],td[data-col="slno"]{width:36px;min-width:36px;max-width:36px;}
+th[data-col="subitem"],td[data-col="subitem"]{width:170px;min-width:170px;max-width:170px;white-space:normal;}
+th[data-col="qty"],td[data-col="qty"]{width:60px;min-width:60px;max-width:60px;}
+th[data-col="latestcost"],td[data-col="latestcost"]{width:100px;min-width:100px;max-width:100px;}
+th[data-col="remarks"],td[data-col="remarks"]{width:160px;min-width:160px;max-width:160px;}
+th[data-col="stage"],td[data-col="stage"]{width:175px;min-width:175px;max-width:175px;}
+th[data-col="unitprice"],td[data-col="unitprice"]{width:100px;min-width:100px;max-width:100px;}
+th[data-col="depot"],td[data-col="depot"]{width:85px;min-width:85px;max-width:85px;}
+th[data-col="nextdue"],td[data-col="nextdue"]{width:100px;min-width:100px;max-width:100px;}
+th[data-col="ownersse"],td[data-col="ownersse"]{width:95px;min-width:95px;max-width:95px;}
+th[data-col="processpdc"],td[data-col="processpdc"]{width:100px;min-width:100px;max-width:100px;}
+th[data-col="pendingwith"],td[data-col="pendingwith"]{width:110px;min-width:110px;max-width:110px;}
+th[data-col="loaponumber"],td[data-col="loaponumber"]{width:150px;min-width:150px;}
+th[data-col="indentno"],td[data-col="indentno"]{width:190px;min-width:190px;}
+.table-panel{background:var(--bg-panel);border:1px solid var(--border);}
+</style>
+</head>
+<body>
+<script>
+if (window.self !== window.top) document.documentElement.classList.add('embedded');
+</script>
+
+<div class="topbar">
+  <h1>DRGSBC <span>UPDATION</span></h1>
+  <div class="sub">My Space · New/Edit Sanction · Sub-Items · Process · Grant · Chronolog</div>
+  <div class="session-badge" id="sessionBadge">CHECKING SESSION…</div>
+</div>
+
+<div class="page-wrap" id="pageWrap">
+  <div class="settings-container">
+    <div class="settings-tabs" id="utabStrip">
+      <button class="stab active" id="utab_btn_my-space" data-utab="my-space">⊹ MY SPACE</button>
+      <button class="stab" id="utab_btn_new-sanction" data-utab="new-sanction">NEW SANCTION</button>
+      <button class="stab" id="utab_btn_edit-sanction" data-utab="edit-sanction">EDIT SANCTION</button>
+      <button class="stab" id="utab_btn_sub-items" data-utab="sub-items">SUB-ITEMS</button>
+      <button class="stab" id="utab_btn_process" data-utab="process">PROCESS</button>
+      <button class="stab" id="utab_btn_grant" data-utab="grant">GRANT</button>
+      <button class="stab" id="utab_btn_chronolog" data-utab="chronolog">CHRONOLOG</button>
+    </div>
+
+    <div class="settings-body">
+
+      <!-- ══════════ MY SPACE ══════════ -->
+      <div class="stab-content active" id="utab-my-space">
+        <div class="settings-section">
+          <div class="settings-section-title" style="display:flex;justify-content:space-between;align-items:center;">
+            MY SPACE
+            <span id="mySpaceUserLabel" style="font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--text-muted);letter-spacing:1px;"></span>
+          </div>
+          <div id="mySpaceContainer">
+
+            <div style="background:var(--bg-card);border:1px solid var(--border);border-left:3px solid var(--accent-cyan);padding:14px 18px;margin-bottom:16px;display:flex;align-items:center;gap:20px;flex-wrap:wrap;">
+              <div style="width:44px;height:44px;background:linear-gradient(135deg,var(--accent-blue),var(--accent-cyan));border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:Rajdhani,sans-serif;font-weight:700;font-size:18px;color:var(--bg-dark);flex-shrink:0;" id="ms_avatar">--</div>
+              <div>
+                <div style="font-family:Rajdhani,sans-serif;font-weight:700;font-size:18px;color:var(--text-primary);letter-spacing:1px;" id="ms_name">--</div>
+                <div style="font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--text-muted);letter-spacing:2px;margin-top:2px;" id="ms_meta">--</div>
+              </div>
+              <div style="margin-left:auto;display:flex;gap:10px;flex-wrap:wrap;" id="ms_assignment_tags"></div>
+            </div>
+
+            <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px;">
+              <div class="ms-stat-card" data-msfilter="all" onmouseover="this.style.borderColor='var(--accent-cyan)'" onmouseout="this.style.borderColor='var(--border)'">
+                <div style="font-family:'Share Tech Mono',monospace;font-size:9px;letter-spacing:2px;color:var(--text-muted);margin-bottom:6px;">MY ITEMS</div>
+                <div style="font-family:Rajdhani,sans-serif;font-weight:700;font-size:28px;color:var(--accent-cyan);" id="ms_stat_total">—</div>
+                <div style="font-family:'Share Tech Mono',monospace;font-size:8px;color:var(--text-muted);margin-top:4px;letter-spacing:1px;">CLICK TO VIEW</div>
+              </div>
+              <div class="ms-stat-card" data-msfilter="po" onmouseover="this.style.borderColor='var(--accent-blue)'" onmouseout="this.style.borderColor='var(--border)'">
+                <div style="font-family:'Share Tech Mono',monospace;font-size:9px;letter-spacing:2px;color:var(--text-muted);margin-bottom:6px;">PO/LOA ISSUED</div>
+                <div style="font-family:Rajdhani,sans-serif;font-weight:700;font-size:28px;color:var(--accent-blue);" id="ms_stat_po">—</div>
+                <div style="font-family:'Share Tech Mono',monospace;font-size:8px;color:var(--text-muted);margin-top:4px;letter-spacing:1px;">CLICK TO VIEW</div>
+              </div>
+              <div class="ms-stat-card" data-msfilter="overdue" onmouseover="this.style.borderColor='var(--accent-red)'" onmouseout="this.style.borderColor='var(--border)'">
+                <div style="font-family:'Share Tech Mono',monospace;font-size:9px;letter-spacing:2px;color:var(--text-muted);margin-bottom:6px;">OVERDUE PDC</div>
+                <div style="font-family:Rajdhani,sans-serif;font-weight:700;font-size:28px;color:var(--accent-red);" id="ms_stat_overdue">—</div>
+                <div style="font-family:'Share Tech Mono',monospace;font-size:8px;color:var(--text-muted);margin-top:4px;letter-spacing:1px;">CLICK TO VIEW</div>
+              </div>
+              <div class="ms-stat-card" data-msfilter="pending" onmouseover="this.style.borderColor='var(--accent-gold)'" onmouseout="this.style.borderColor='var(--border)'">
+                <div style="font-family:'Share Tech Mono',monospace;font-size:9px;letter-spacing:2px;color:var(--text-muted);margin-bottom:6px;">PENDING WITH ME</div>
+                <div style="font-family:Rajdhani,sans-serif;font-weight:700;font-size:28px;color:var(--accent-gold);" id="ms_stat_pending">—</div>
+                <div style="font-family:'Share Tech Mono',monospace;font-size:8px;color:var(--text-muted);margin-top:4px;letter-spacing:1px;">CLICK TO VIEW</div>
+              </div>
+            </div>
+
+            <div id="ms_detail_section" style="display:none;">
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px;">
+                <div style="font-family:Rajdhani,sans-serif;font-weight:600;font-size:13px;letter-spacing:2px;color:var(--accent-cyan);" id="ms_detail_title">ITEMS</div>
+                <button id="ms_detail_close" style="background:transparent;border:1px solid var(--border);color:var(--text-muted);font-family:'Share Tech Mono',monospace;font-size:9px;padding:3px 10px;cursor:pointer;">✕ CLOSE</button>
+              </div>
+              <div style="overflow-x:auto;border:1px solid var(--border);">
+                <table style="width:100%;border-collapse:collapse;font-size:11px;min-width:1000px;">
+                  <thead>
+                    <tr style="background:var(--table-head-bg);border-bottom:1px solid var(--border-accent);position:sticky;top:0;z-index:10;">
+                      <th class="pd-th" style="width:36px;">#</th>
+                      <th class="pd-th">UNDER POWER</th>
+                      <th class="pd-th" style="min-width:140px;">ITEM NAME</th>
+                      <th class="pd-th" style="min-width:160px;">SUB-ITEM NAME</th>
+                      <th class="pd-th">QTY</th>
+                      <th class="pd-th">TOTAL AMT (₹)</th>
+                      <th class="pd-th">CONSIGNEE</th>
+                      <th class="pd-th">PROC DEPOT</th>
+                      <th class="pd-th">STAGE</th>
+                      <th class="pd-th" style="min-width:120px;">REMARKS</th>
+                      <th class="pd-th">ACTION</th>
+                    </tr>
+                  </thead>
+                  <tbody id="ms_detail_body">
+                    <tr><td colspan="11" style="text-align:center;padding:20px;font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--text-muted);">Click a stat card above to view items</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div id="ms_load_msg" style="font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--text-muted);text-align:center;padding:20px;">Loading your data…</div>
+
+          </div>
+        </div>
+      </div>
+
+      <!-- ══════════ NOT YET BUILT — placeholders ══════════ -->
+      <!-- ══════════ NEW SANCTION ══════════ -->
+      <div class="stab-content" id="utab-new-sanction">
+        <div class="settings-section">
+          <div class="settings-section-title">SANCTION HEADER DETAILS</div>
+          <div class="filter-grid" style="margin-bottom:20px;grid-template-columns:repeat(4,1fr);">
+            <div class="form-group" style="grid-column:span 2;">
+              <label class="form-label">UNDER POWER *</label>
+              <input class="form-input" type="text" id="sancUnderPower" placeholder="Enter under power">
+            </div>
+            <div class="form-group" style="grid-column:span 2;">
+              <label class="form-label">LOCATION *</label>
+              <select class="filter-select" id="sancDepot" style="width:100%;">
+                <option value="SBC">SBC</option>
+                <option value="YPR">YPR</option>
+                <option value="SMVB">SMVB</option>
+                <option value="SGT">SGT</option>
+                <option value="BAND">BAND</option>
+                <option value="SBC-HQ">SBC-HQ</option>
+              </select>
+            </div>
+            <div class="form-group" style="grid-column:span 2;">
+              <label class="form-label">SANCTION DETAIL * (Max 30 chars)</label>
+              <input class="form-input" type="text" id="sancDetail" maxlength="30" placeholder="Enter details">
+            </div>
+            <div class="form-group">
+              <label class="form-label" style="display:flex;justify-content:space-between;">
+                <span>SANCTIONED ON *</span>
+                <span id="sancDateDisplay" style="color:var(--accent-cyan);letter-spacing:1px;"></span>
+              </label>
+              <input class="form-input" type="date" id="sancDate">
+            </div>
+            <div class="form-group">
+              <label class="form-label">SANCTION YEAR *</label>
+              <select class="filter-select" id="sancYear" style="width:100%;"></select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">ALLOCATION *</label>
+              <select class="filter-select" id="sancAllocation" style="width:100%;">
+                <option value="CAP">CAP</option>
+                <option value="DRF">DRF</option>
+                <option value="DF1">DF1</option>
+                <option value="DF2">DF2</option>
+                <option value="DF3">DF3</option>
+                <option value="RRSK">RRSK</option>
+                <option value="Deposit">Deposit</option>
+                <option value="EBR">EBR</option>
+                <option value="Revenue">Revenue</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">WID *</label>
+              <input class="form-input" type="text" id="sancWid" placeholder="Enter 'WID-Under Power Name' if unsure">
+            </div>
+            <div class="form-group">
+              <label class="form-label">PLAN HEAD *</label>
+              <input class="form-input" type="text" id="sancPlanHead"
+                list="planHeadOptions" placeholder="Type or select (e.g. 2100, 5300)" style="width:100%;">
+              <datalist id="planHeadOptions">
+                <option value="2100">2100</option>
+                <option value="4100">4100</option>
+                <option value="4200">4200</option>
+              </datalist>
+            </div>
+            <div class="form-group" style="grid-column:span 2;">
+              <label class="form-label" style="color:var(--accent-cyan);font-weight:bold;">TOTAL COST (Rs.)</label>
+              <input class="form-input" type="text" id="sancTotalCost" placeholder="0.00" style="background:var(--bg-dark);color:var(--accent-cyan);font-weight:bold;font-size:16px;" readonly>
+            </div>
+            <div class="form-group" style="grid-column:span 4;">
+              <label class="form-label">ORIGINAL SANCTION NAME
+                <span style="color:var(--text-muted);font-size:8px;letter-spacing:1px;margin-left:8px;">Optional · Max 350 chars · e.g. full sanction title from Railway Board letter</span>
+              </label>
+              <input class="form-input" type="text" id="sancOriginalName" maxlength="350"
+                placeholder="Enter original sanction name / description as per RB letter (optional)">
+            </div>
+          </div>
+
+          <div class="settings-section-title" style="display:flex;justify-content:space-between;align-items:center;">
+            LINE ITEMS
+            <div style="display:flex;align-items:center;gap:16px;">
+              <label style="display:flex;align-items:center;gap:6px;font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--text-secondary);cursor:pointer;font-weight:400;letter-spacing:1px;">
+                <input type="checkbox" id="editEstimateToggle" style="accent-color:var(--accent-cyan);">
+                EDIT ESTIMATE
+              </label>
+              <button class="btn-fetch" id="ns_add_item_btn" type="button">+ ADD ITEM</button>
+            </div>
+          </div>
+
+          <datalist id="unitOptions">
+            <option value="Nos"></option><option value="Sqft"></option><option value="Sqm"></option>
+            <option value="Set"></option><option value="M"></option><option value="KM"></option>
+            <option value="EBU"></option><option value="Coach"></option><option value="Rake"></option>
+            <option value="Job"></option><option value="Kg"></option><option value="Ton"></option>
+            <option value="Pair"></option><option value="Litre"></option><option value="LS"></option>
+          </datalist>
+
+          <div id="lineItemsContainer"></div>
+
+          <div style="margin-top:20px;display:flex;align-items:center;justify-content:flex-end;gap:12px;">
+            <div id="sanctionSubmitStatus" style="font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--text-muted);"></div>
+            <button class="btn-save-settings" id="btnSubmitSanction" style="width:200px;">SUBMIT SANCTION</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ══════════ EDIT SANCTION ══════════ -->
+      <div class="stab-content" id="utab-edit-sanction">
+        <div class="settings-section">
+          <div class="settings-section-title">STEP 1 · SELECT SANCTION TO EDIT
+            <button class="btn-fetch" id="es_refresh_btn" style="padding:5px 14px;font-size:11px;">↺ REFRESH</button>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:12px;align-items:end;margin-bottom:16px;">
+            <div class="form-group">
+              <label class="form-label">UNDER POWER</label>
+              <select class="filter-select" id="es_under_power">
+                <option value="">-- SELECT --</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">SANCTION YEAR</label>
+              <select class="filter-select" id="es_year">
+                <option value="">-- SELECT --</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">ALLOCATION TYPE</label>
+              <select class="filter-select" id="es_allocation">
+                <option value="">-- SELECT --</option>
+                <option>CAP</option><option>DRF</option><option>DF1</option>
+                <option>DF2</option><option>DF3</option><option>RRSK</option>
+                <option>Deposit</option><option>EBR</option><option>Revenue</option>
+              </select>
+            </div>
+            <button id="es_add_new_item_btn" class="btn-save-settings" style="display:none;white-space:nowrap;padding:8px 16px;font-size:11px;">+ NEW ITEM</button>
+          </div>
+        </div>
+
+        <div id="es_header_strip" style="display:none;background:var(--bg-card);border:1px solid var(--border);border-left:3px solid var(--accent-cyan);padding:12px 18px;margin-bottom:14px;">
+          <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:12px;">
+            <div><div class="form-label">SANCTION ID</div><div id="esh_id" style="font-family:Rajdhani,sans-serif;font-size:15px;color:var(--accent-cyan);font-weight:700;margin-top:3px;">—</div></div>
+            <div><div class="form-label">UNDER POWER</div><div id="esh_up" style="font-size:13px;color:var(--text-primary);margin-top:3px;">—</div></div>
+            <div><div class="form-label">SANCTION YEAR</div><div id="esh_yr" style="font-size:13px;color:var(--text-primary);margin-top:3px;">—</div></div>
+            <div><div class="form-label">ALLOCATION</div><div id="esh_alloc" style="font-size:13px;color:var(--text-primary);margin-top:3px;">—</div></div>
+            <div><div class="form-label">PLAN HEAD</div><div id="esh_ph" style="font-size:13px;color:var(--text-primary);margin-top:3px;">—</div></div>
+            <div><div class="form-label">TOTAL COST (Rs.)</div><div id="esh_cost" style="font-family:Rajdhani,sans-serif;font-size:15px;color:var(--accent-gold);font-weight:700;margin-top:3px;">—</div></div>
+          </div>
+        </div>
+
+        <div id="esh_alias_banner" style="display:none;margin-bottom:12px;
+          background:rgba(255,214,10,0.05);border:1px solid rgba(255,214,10,0.25);
+          border-left:3px solid var(--accent-warn);border-radius:6px;padding:12px 16px;">
+          <div style="font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--accent-warn);
+            letter-spacing:2px;margin-bottom:8px;">WORK ALIASES (YEAR-WISE SANCTION CODES)</div>
+          <div id="esh_alias_canonical" style="font-size:12px;color:var(--text-primary);
+            font-weight:600;margin-bottom:8px;">—</div>
+          <div id="esh_alias_list" style="display:flex;flex-wrap:wrap;gap:6px;"></div>
+        </div>
+
+        <div id="es_items_section" style="display:none;">
+          <div class="settings-section-title" style="display:flex;justify-content:space-between;align-items:center;">
+            <span>STEP 2 · EDIT LINE ITEMS
+              <span id="es_items_count" style="font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--text-muted);font-weight:400;"></span>
+            </span>
+            <label style="display:inline-flex;align-items:center;gap:6px;font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--text-secondary);cursor:pointer;font-weight:400;letter-spacing:1px;">
+              <input type="checkbox" id="es_edit_estimate_toggle" style="accent-color:var(--accent-cyan);"> EDIT ESTIMATE
+            </label>
+          </div>
+          <div style="overflow-x:auto;margin-bottom:14px;">
+            <table id="es_items_table" class="es-hide-estimate" style="width:100%;border-collapse:collapse;font-size:12px;min-width:1300px;">
+              <thead>
+                <tr style="background:var(--table-head-bg);border-bottom:1px solid var(--border-accent);position:sticky;top:0;z-index:10;">
+                  <th class="pd-th">#</th>
+                  <th class="pd-th" style="min-width:200px;">ITEM NAME</th>
+                  <th class="pd-th" style="min-width:90px;">LI CODE</th>
+                  <th class="pd-th">UNIT</th>
+                  <th class="pd-th pd-edit-h">QTY</th>
+                  <th class="pd-th pd-edit-h">BASE PRICE</th>
+                  <th class="pd-th pd-edit-h">TAX &amp; OTHERS</th>
+                  <th class="pd-th">UNIT PRICE</th>
+                  <th class="pd-th">TOTAL VALUE</th>
+                  <th class="pd-th pd-edit-h" style="min-width:110px;">PROC DEPOT</th>
+                  <th class="pd-th pd-edit-h" style="min-width:120px;">
+                    LIVE ESTIMATE
+                    <label style="display:flex;align-items:center;gap:4px;font-weight:400;font-size:8px;color:var(--text-muted);margin-top:3px;cursor:pointer;" title="Fill all rows with the first row's Live Estimate / Submitted On / Vetted On values">
+                      <input type="checkbox" id="es_fill_all_estimate" style="accent-color:var(--accent-cyan);">
+                      FILL ALL
+                    </label>
+                  </th>
+                  <th class="pd-th pd-edit-h" style="min-width:120px;">SUBMITTED ON</th>
+                  <th class="pd-th pd-edit-h" style="min-width:120px;">VETTED ON</th>
+                  <th class="pd-th pd-edit-h" style="min-width:130px;">ACTION</th>
+                  <th class="pd-th"></th>
+                </tr>
+              </thead>
+              <tbody id="es_items_body"></tbody>
+            </table>
+          </div>
+
+          <div style="display:flex;align-items:center;justify-content:flex-end;gap:12px;margin-top:16px;padding-top:14px;border-top:1px solid var(--border);">
+            <div id="es_submit_msg" style="font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--text-muted);flex:1;"></div>
+            <button class="btn-warn" id="es_reset_btn">RESET</button>
+            <button class="btn-save-settings" id="es_submit_btn" style="width:220px;">SUBMIT CHANGES</button>
+          </div>
+        </div>
+      </div>
+      <!-- ══════════ SUB-ITEMS ══════════ -->
+      <div class="stab-content" id="utab-sub-items">
+
+        <div class="settings-section">
+          <div class="settings-section-title">STEP 1 · SELECT PARENT SANCTION ITEM
+            <button class="btn-fetch" id="si_refresh_btn" style="padding:5px 14px;font-size:11px;">↺ REFRESH LIST</button>
+          </div>
+
+          <div class="filter-grid" style="grid-template-columns:1fr 1fr 1fr 1fr;margin-bottom:16px;">
+            <div class="form-group">
+              <label class="form-label">UNDER POWER *</label>
+              <input class="form-input" type="text" id="si_under_power"
+                list="si_up_list" placeholder="Select or type under power..." autocomplete="off">
+              <datalist id="si_up_list"></datalist>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">ITEM NAME (LINE ITEM) *</label>
+              <input class="form-input" type="text" id="si_item_name"
+                list="si_item_list" placeholder="Select item name..." autocomplete="off">
+              <datalist id="si_item_list"></datalist>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">LINE ITEM ID (auto-resolved)</label>
+              <input class="form-input" type="text" id="si_line_item_id"
+                readonly placeholder="Resolved after item selection" style="color:var(--accent-cyan);font-size:11px;">
+            </div>
+			  <div class="form-group">
+              <label class="form-label">PROCESSING DEPOT</label>
+              <input class="form-input" type="text" id="si_line_item_proc_depot"
+                readonly placeholder="Resolved after item selection" style="color:var(--accent-cyan);font-size:11px;"> 
+              
+            </div>
+          </div>
+
+          <div id="si_parent_strip" style="display:none;
+            background:var(--bg-card);border:1px solid var(--border);
+            border-left:3px solid var(--accent-cyan);
+            padding:12px 18px;margin-bottom:4px;">
+            <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;">
+              <div>
+                <div class="form-label" id="si_lbl_year">SANCTION YEAR</div>
+                <div id="si_disp_year" style="font-family:Rajdhani,sans-serif;font-size:16px;color:var(--accent-cyan);font-weight:700;margin-top:3px;">—</div>
+              </div>
+              <div>
+                <div class="form-label" id="si_lbl_head">PLAN HEAD</div>
+                <div id="si_disp_head" style="font-family:Rajdhani,sans-serif;font-size:16px;color:var(--text-primary);font-weight:600;margin-top:3px;">—</div>
+              </div>
+              <div>
+                <div class="form-label" id="si_lbl_total">TOTAL LINE-ITEM SANCTION COST (Rs.)</div>
+                <div id="si_disp_total" style="font-family:Rajdhani,sans-serif;font-size:16px;color:var(--accent-gold);font-weight:700;margin-top:3px;">—</div>
+              </div>
+              <div>
+                <div class="form-label" id="si_lbl_sum">SUM OF SUB-ITEMS vs TOTAL</div>
+                <div style="display:flex;align-items:center;gap:8px;margin-top:3px;">
+                  <div id="si_disp_subsum" style="font-family:Rajdhani,sans-serif;font-size:16px;font-weight:700;color:var(--text-muted);">—</div>
+                  <div id="si_match_badge" style="display:none;font-family:'Share Tech Mono',monospace;font-size:9px;padding:2px 7px;border-radius:2px;"></div>
+                </div>
+              </div>
+            </div>
+            <div id="si_cost_bar" style="height:2px;margin-top:10px;background:var(--border);border-radius:1px;transition:background .4s;"></div>
+          </div>
+        </div>
+
+        <div class="settings-section" id="si_form_section" style="display:none;">
+          <div class="settings-section-title">
+            STEP 2 · ENTER / EDIT SUB-ITEMS
+            <button class="btn-fetch" id="si_add_row_btn" style="padding:5px 14px;font-size:11px;">+ ADD ROW</button>
+          </div>
+
+          <div id="si_rows_wrap"></div>
+
+          <div style="display:flex;align-items:center;justify-content:flex-end;gap:14px;margin-top:18px;padding-top:14px;border-top:1px solid var(--border);">
+            <div id="si_submit_msg" style="font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--text-muted);flex:1;"></div>
+            <button class="btn-warn" id="si_clear_form_btn">CLEAR FORM</button>
+            <button class="btn-save-settings" id="si_submit_btn" style="width:220px;">ADD SUB-ITEMS</button>
+          </div>
+        </div>
+
+        <div class="settings-section" id="si_existing_section" style="display:none;">
+          <div class="settings-section-title" id="si_existing_section_title">EXISTING SUB-ITEMS FOR THIS LINE ITEM</div>
+          <!-- UP-mode grouped table renders here; static table-wrapper below is preserved for LI-mode -->
+          <div id="si_grouped_wrap" style="display:none;overflow-x:auto;"></div>
+          <div class="table-wrapper">
+            <table style="font-size:11px;">
+              <thead>
+                <tr style="background:var(--table-head-bg);border-bottom:1px solid var(--border-accent);position:sticky;top:0;z-index:10;">
+                  <th style="font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--accent-blue);padding:8px 10px;">#</th>
+                  <th style="font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--accent-blue);padding:8px 10px;">NAME</th>
+                  <th style="font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--accent-blue);padding:8px 10px;">DESCRIPTION</th>
+                  <th style="font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--accent-blue);padding:8px 10px;">MAKE/MODEL</th>
+                  <th style="font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--accent-blue);padding:8px 10px;">CAPACITY</th>
+                  <th style="font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--accent-blue);padding:8px 10px;">SANCTION COST</th>
+                  <th style="font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--accent-blue);padding:8px 10px;">DE COST</th>
+                  <th style="font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--accent-blue);padding:8px 10px;">UNIT</th>
+                  <th style="font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--accent-blue);padding:8px 10px;">QTY</th>
+                  <th style="font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--accent-blue);padding:8px 10px;">BASE PRICE</th>
+                  <th style="font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--accent-blue);padding:8px 10px;">TAX</th>
+                  <th style="font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--accent-blue);padding:8px 10px;">UNIT PRICE</th>
+                  <th style="font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--accent-blue);padding:8px 10px;">TOTAL</th>
+                  <th style="font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--accent-blue);padding:8px 10px;">ACT</th>
+                </tr>
+              </thead>
+              <tbody id="si_existing_body"></tbody>
+            </table>
+          </div>
+        </div>
+
+      </div>
+      <!-- ══════════ PROCESS ══════════ -->
+      <div class="stab-content" id="utab-process">
+        <div class="settings-section">
+          <div class="settings-section-title">FILTER SUB-ITEMS
+            <span style="font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--text-muted);font-weight:400;">Sub-item name search starts after 3 characters</span>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(3,1fr) repeat(3,1fr);gap:10px;margin-bottom:10px;max-width:100%;overflow:hidden;">
+
+            <div class="form-group">
+              <label class="form-label">PLAN HEAD</label>
+              <select class="filter-select" id="pd_f_planhead">
+                <option value="ALL">ALL</option>
+                <option value="2100">2100</option>
+                <option value="4100">4100</option>
+                <option value="4200">4200</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">PROCESSING DEPOT</label>
+              <select class="filter-select" id="pd_f_depot">
+                <option value="ALL">ALL</option>
+                <option value="SBC">SBC</option><option value="YPR">YPR</option>
+                <option value="SGT">SGT</option><option value="SMVB">SMVB</option>
+                <option value="BAND">BAND</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">UNDER POWER</label>
+              <select class="filter-select" id="pd_f_underpower"><option value="ALL">ALL</option></select>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">LINE ITEM NAME</label>
+              <select class="filter-select" id="pd_f_lineitem" style="max-width:150px;"><option value="ALL">ALL</option></select>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">SUB-ITEM NAME (min 3 chars)</label>
+              <input class="form-input" type="text" id="pd_f_subitem" list="pd_subitem_dl" placeholder="Type min 3 chars to search..." autocomplete="off">
+              <datalist id="pd_subitem_dl"></datalist>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">PROCESS STAGE</label>
+              <select class="filter-select" id="pd_f_stage">
+                <option value="ALL">ALL</option>
+                <option>Indent Under Prep</option><option>Indent Submitted</option>
+                <option>PO/LOA Issued</option><option>Supply Due</option>
+                <option>Item Delivered</option><option>CRN Receipt</option>
+                <option>PTO Process</option><option>Bill Submitted</option>
+                <option>Bill Passed</option><option>Work completed</option>
+                <option>On Hold</option><option>Dropped</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">PENDING WITH</label>
+              <select class="filter-select" id="pd_f_pending"><option value="ALL">ALL</option></select>
+            </div>
+
+            <div style="display:flex;align-items:flex-end;gap:8px;grid-column:span 2;">
+              <button class="btn-fetch" id="pd_fetch_btn" style="padding:8px 18px;font-size:12px;">FETCH SUB-ITEMS</button>
+              <button class="btn-warn sm" id="pd_reset_btn">RESET</button>
+              <div id="pd_fetch_status" style="font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--text-muted);padding-left:8px;"></div>
+            </div>
+          </div>
+        </div>
+
+        <div id="pd_bottom_section" style="display:none;">
+
+          <div id="pd_summary_strip" style="background:var(--bg-card);border:1px solid var(--border);border-left:3px solid var(--accent-blue);padding:10px 18px;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+            <div style="font-family:Rajdhani,sans-serif;font-size:14px;letter-spacing:1px;color:var(--text-secondary);">
+              SHOWING <strong id="pd_row_count" style="color:var(--accent-cyan);">0</strong> SUB-ITEMS
+            </div>
+          </div>
+
+          <div style="background:var(--bg-panel);border:1px solid var(--border);">
+            <div style="display:flex;border-bottom:1px solid var(--border);align-items:center;">
+              <button class="stab active" id="pd_stab_summ" data-pdtab="summary_sub" style="font-size:12px;padding:11px 20px;">SUMMARY</button>
+              <button class="stab" id="pd_stab_proc" data-pdtab="procurement" style="font-size:12px;padding:11px 20px;">PROCUREMENT</button>
+              <button class="stab" id="pd_stab_bill" data-pdtab="billing" style="font-size:12px;padding:11px 20px;">BILLING</button>
+              <div style="margin-left:auto;padding-right:12px;position:relative;">
+                <button class="btn-fetch" id="pd_col_settings_btn" style="padding:5px 14px;font-size:11px;display:none;">⚙ COLUMN SETTINGS</button>
+                <div id="pd_col_panel" style="display:none;position:absolute;top:calc(100% + 4px);right:0;z-index:100;
+                    background:var(--modal-bg);border:1px solid var(--border-accent);border-radius:6px;
+                    padding:14px 18px;width:max-content;min-width:240px;box-shadow:0 8px 24px rgba(0,0,0,0.4);">
+                  <div style="font-family:Rajdhani,sans-serif;font-weight:700;font-size:12px;letter-spacing:2px;color:var(--accent-cyan);margin-bottom:10px;">
+                    COLUMN VISIBILITY
+                  </div>
+                  <div style="display:flex;flex-direction:column;align-items:flex-start;gap:9px;">
+                    <label class="pd-col-toggle"><input type="checkbox" data-col="remarks"> Remarks</label>
+                    <label class="pd-col-toggle"><input type="checkbox" data-col="stage"> Stage</label>
+                    <label class="pd-col-toggle"><input type="checkbox" data-col="unitprice"> Unit Price</label>
+                    <label class="pd-col-toggle"><input type="checkbox" data-col="depot"> Consignee Depot</label>
+                    <label class="pd-col-toggle"><input type="checkbox" data-col="nextdue"> Next Process Due On</label>
+                    <label class="pd-col-toggle"><input type="checkbox" data-col="ownersse"> Owner / SSE</label>
+                    <label class="pd-col-toggle"><input type="checkbox" data-col="processpdc"> Process PDC</label>
+                    <div id="pd_col_group_pills">
+                      <div style="border-top:1px solid var(--border);margin:3px 0 9px;"></div>
+                      <div style="display:flex;flex-direction:column;gap:9px;">
+                        <label class="pd-col-toggle"><input type="checkbox" data-grp="indent"> Indent Details</label>
+                        <label class="pd-col-toggle"><input type="checkbox" data-grp="loapo"> LOA/PO Details</label>
+                        <label class="pd-col-toggle"><input type="checkbox" data-grp="inward"> Inward Details</label>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="loading-bar" id="pd_lbar" style="display:none;"></div>
+
+            <div id="pd_tab_summary_sub" style="padding:16px;">
+              <div id="summ_sub_empty" style="text-align:center;padding:40px;font-family:'Share Tech Mono',monospace;font-size:11px;color:var(--text-muted);">Fetch sub-items first to see summary.</div>
+              <div id="summ_sub_content" style="display:none;">
+                <div id="summ_filter_labels" style="font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--text-muted);padding:8px 4px 12px;letter-spacing:0.5px;border-bottom:1px solid var(--border);margin-bottom:16px;"></div>
+                <div id="summ_banner" style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:20px;"></div>
+                <div class="table-panel" style="margin-bottom:14px;padding:16px;">
+                  <div style="font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--accent-cyan);margin-bottom:10px;letter-spacing:1px;">STATUS DISTRIBUTION</div>
+                  <div id="summ_status_bar" style="display:flex;height:40px;border-radius:4px;overflow:hidden;width:100%;"></div>
+                  <div id="summ_status_legend" style="display:flex;flex-wrap:wrap;gap:10px;margin-top:10px;"></div>
+                </div>
+                <div class="table-panel" style="margin-bottom:14px;padding:16px;">
+                  <div style="font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--accent-cyan);margin-bottom:10px;letter-spacing:1px;">PENDING WITH</div>
+                  <div id="summ_pending_bar" style="display:flex;height:40px;border-radius:4px;overflow:hidden;width:100%;"></div>
+                  <div id="summ_pending_legend" style="display:flex;flex-wrap:wrap;gap:10px;margin-top:10px;"></div>
+                </div>
+                <div class="table-panel" style="margin-bottom:14px;padding:16px;">
+                  <div style="font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--accent-cyan);margin-bottom:10px;letter-spacing:1px;">FINANCIAL SUMMARY (vs TOTAL VETTED COST)</div>
+                  <div id="summ_finance_bar" style="display:flex;height:40px;border-radius:4px;overflow:hidden;width:100%;"></div>
+                  <div id="summ_finance_legend" style="display:flex;flex-wrap:wrap;gap:10px;margin-top:10px;"></div>
+                </div>
+                <div id="summ_items_panel" class="table-panel" style="margin-bottom:14px;padding:16px;max-height:400px;overflow-y:auto;overflow-x:hidden;">
+                  <div style="font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--accent-cyan);margin-bottom:10px;letter-spacing:1px;">FETCHED ITEMS</div>
+                  <div id="summ_items_list"></div>
+                </div>
+              </div>
+            </div>
+
+            <div id="pd_tab_procurement" style="display:none;overflow-x:auto;overflow-y:auto;max-height:65vh;position:relative;">
+              <table id="pd_proc_table" style="width:100%;border-collapse:collapse;font-size:11px;min-width:1400px;">
+                <thead>
+                  <tr style="background-color:var(--bg-panel);background-image:linear-gradient(var(--table-head-bg),var(--table-head-bg));border-bottom:1px solid var(--border-accent);position:sticky;top:0;z-index:11;">
+                    <th class="pd-th pd-frozen" data-col="slno">#</th>
+                    <th class="pd-th pd-frozen" data-col="subitem">SUB-ITEM NAME</th>
+                    <th class="pd-th pd-frozen" data-col="qty">QTY</th>
+                    <th class="pd-th pd-frozen" data-col="latestcost">LATEST COST</th>
+                    <th class="pd-th pd-col" data-col="remarks">REMARKS</th>
+                    <th class="pd-th pd-col" style="color:var(--accent-gold);" data-col="stage">STAGE</th>
+                    <th class="pd-th pd-col" data-col="unitprice">UNIT PRICE</th>
+                    <th class="pd-th pd-col" data-col="depot">CONSIGNEE DEPOT</th>
+                    <th class="pd-th pd-col" data-col="nextdue">NEXT DUE ON</th>
+                    <th class="pd-th pd-col" data-col="ownersse">OWNER / SSE</th>
+                    <th class="pd-th pd-col" data-col="processpdc">PROCESS PDC</th>
+                    <th class="pd-th" data-col="pendingwith">PENDING WITH</th>
+                    <th class="pd-th pd-edit-h pd-grp" data-grp="indent" data-col="indentno">INDENT/DEMAND NO</th>
+                    <th class="pd-th pd-edit-h pd-grp" data-grp="indent" data-col="indentdate">INDENT DATE</th>
+                    <th class="pd-th pd-edit-h pd-grp" data-grp="indent" data-col="tendercalledon">TENDER CALLED ON</th>
+                    <th class="pd-th pd-edit-h pd-grp" data-grp="indent" data-col="tenderopenedon">TENDER OPENED ON</th>
+                    <th class="pd-th pd-edit-h pd-grp" data-grp="loapo" data-col="vendorname">VENDOR NAME</th>
+                    <th class="pd-th pd-edit-h pd-grp" data-grp="loapo" data-col="loaponumber">LOA/PO NO</th>
+                    <th class="pd-th pd-edit-h pd-grp" data-grp="loapo" data-col="loapodate">LOA/PO DATE</th>
+                    <th class="pd-th pd-edit-h pd-grp" data-grp="inward" data-col="deliverydate">DELIVERY DATE</th>
+                    <th class="pd-th pd-edit-h pd-grp" data-grp="inward" data-col="commissioningdate">COMMISSIONING DATE</th>
+                    <th class="pd-th pd-edit-h pd-grp" data-grp="inward" data-col="ptcdate">PTC DATE</th>
+                    <th class="pd-th pd-edit-h pd-grp" data-grp="inward" data-col="crnno">CRN NO</th>
+                    <th class="pd-th pd-edit-h pd-grp" data-grp="inward" data-col="crndate">CRN DATE</th>
+                  </tr>
+                </thead>
+                <tbody id="pd_proc_body"></tbody>
+            </table>
+            </div>
+
+            <div id="pd_tab_billing" style="display:none;overflow-x:auto;overflow-y:auto;max-height:65vh;position:relative;">
+              <table id="pd_bill_table" style="width:100%;border-collapse:collapse;font-size:11px;min-width:1200px;">
+                <thead>
+                  <tr style="background-color:var(--bg-panel);background-image:linear-gradient(var(--table-head-bg),var(--table-head-bg));border-bottom:1px solid var(--border-accent);position:sticky;top:0;z-index:11;">
+                    <th class="pd-th pd-frozen" data-col="slno">#</th>
+                    <th class="pd-th pd-frozen" data-col="subitem">SUB-ITEM NAME</th>
+                    <th class="pd-th pd-frozen" data-col="qty">QTY</th>
+                    <th class="pd-th pd-frozen" data-col="latestcost">LATEST COST</th>
+                    <th class="pd-th pd-col" data-col="remarks">REMARKS</th>
+                    <th class="pd-th pd-col" style="color:var(--accent-gold);" data-col="stage">STAGE</th>
+                    <th class="pd-th pd-col" data-col="unitprice">UNIT PRICE</th>
+                    <th class="pd-th pd-col" data-col="depot">DEPOT</th>
+                    <th class="pd-th pd-col" data-col="nextdue">NEXT DUE ON</th>
+                    <th class="pd-th pd-col" data-col="ownersse">OWNER / SSE</th>
+                    <th class="pd-th pd-col" data-col="processpdc">PROCESS PDC</th>
+                    <th class="pd-th" data-col="pendingwith">PENDING WITH</th>
+                    <th class="pd-th pd-edit-h">TOTAL BILLS</th>
+                    <th class="pd-th pd-edit-h">ADD BILL</th>
+                    <th class="pd-th pd-edit-h">VIEW BILLS</th>
+                  </tr>
+                </thead>
+                <tbody id="pd_bill_body"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <div style="display:flex;align-items:center;justify-content:flex-end;gap:12px;margin-top:14px;padding-top:14px;border-top:1px solid var(--border);">
+            <div id="pd_save_msg2" style="font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--text-muted);flex:1;"></div>
+            <span id="pd_dirty_badge" style="display:none;font-family:'Share Tech Mono',monospace;font-size:9px;background:rgba(255,214,10,0.12);color:var(--accent-gold);border:1px solid rgba(255,214,10,0.3);padding:4px 10px;border-radius:2px;">⚠ UNSAVED CHANGES</span>
+            <button class="btn-fetch" id="pd_get_pdf_btn" style="padding:10px 22px;font-size:12px;">⬇ GET PDF</button>
+            <button class="btn-warn" id="pd_discard_btn" style="display:none;">DISCARD CHANGES</button>
+            <button class="btn-save-settings" id="pd_save_all_btn2" style="width:200px;display:none;">SAVE ALL CHANGES</button>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- ══════════ GRANT ══════════ -->
+      <div class="stab-content" id="utab-grant">
+
+        <div class="settings-section">
+          <div class="settings-section-title">STEP 1 · GRANT HEADER
+            <button class="btn-fetch" id="gd_refresh_btn" style="padding:5px 14px;font-size:11px;">↺ REFRESH</button>
+          </div>
+
+          <div class="filter-grid" style="grid-template-columns:repeat(4,1fr) 1fr 1fr;gap:12px;margin-bottom:0;">
+            <div class="form-group">
+              <label class="form-label">PLAN HEAD *</label>
+              <select class="filter-select" id="gd_plan_head">
+                <option value="">-- SELECT --</option>
+                <option value="2100">2100</option>
+                <option value="4100">4100</option>
+                <option value="4200">4200</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">GRANT BY</label>
+              <select class="filter-select" id="gd_grant_by">
+                <option value="under_power">UNDER POWER</option>
+                <option value="item_name">ITEM NAME</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" id="gd_dl2_label">UNDER POWER / ITEM NAME *</label>
+              <input class="form-input" type="text" id="gd_selector"
+                list="gd_selector_list" placeholder="Select..." autocomplete="off">
+              <datalist id="gd_selector_list"></datalist>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">GRANT TYPE *</label>
+              <select class="filter-select" id="gd_grant_type">
+                <option value="Budget">Budget</option>
+                <option value="Revised">Revised</option>
+                <option value="Final">Final</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">GRANT DATE * (dd-mm-yyyy)</label>
+              <input class="form-input" type="date" id="gd_grant_date" style="color-scheme:dark;">
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">GRANT YEAR *</label>
+              <select class="filter-select" id="gd_grant_year"></select>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">ESTIMATE TYPE *</label>
+              <select class="filter-select" id="gd_estimate_type">
+                <option value="Budget">Budget</option>
+                <option value="Revised">Revised</option>
+                <option value="Final">Final</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <div class="settings-section" id="gd_table_section" style="display:none;">
+          <div class="settings-section-title" id="gd_table_title">GRANT ALLOCATION TABLE</div>
+
+          <div id="gd_summary_strip" style="
+            background:var(--bg-card);border:1px solid var(--border);
+            border-left:3px solid var(--accent-blue);
+            padding:10px 18px;margin-bottom:14px;
+            display:grid;grid-template-columns:repeat(4,1fr);gap:12px;">
+            <div>
+              <div class="form-label">PLAN HEAD</div>
+              <div id="gds_ph" style="font-family:Rajdhani,sans-serif;font-size:16px;color:var(--accent-cyan);font-weight:700;margin-top:3px;">—</div>
+            </div>
+            <div>
+              <div class="form-label">GRANT BY</div>
+              <div id="gds_by" style="font-family:Rajdhani,sans-serif;font-size:15px;color:var(--text-primary);font-weight:600;margin-top:3px;">—</div>
+            </div>
+            <div>
+              <div class="form-label">TOTAL LATEST COST (Rs.)</div>
+              <div id="gds_cost" style="font-family:Rajdhani,sans-serif;font-size:16px;color:var(--accent-gold);font-weight:700;margin-top:3px;">—</div>
+            </div>
+            <div>
+              <div class="form-label">TOTAL GRANT ENTERED (Rs.)</div>
+              <div id="gds_grant" style="font-family:Rajdhani,sans-serif;font-size:16px;color:var(--accent-green);font-weight:700;margin-top:3px;">—</div>
+            </div>
+          </div>
+
+          <div style="overflow-x:auto;">
+            <table id="gd_alloc_table" style="width:100%;border-collapse:collapse;font-size:12px;">
+              <thead>
+                <tr style="background:var(--table-head-bg);border-bottom:1px solid var(--border-accent);position:sticky;top:0;z-index:10;">
+                  <th style="font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--accent-blue);padding:9px 10px;text-align:left;white-space:nowrap;">#</th>
+                  <th style="font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--accent-blue);padding:9px 10px;text-align:left;white-space:nowrap;">ITEM NAME / SANCTION DETAIL</th>
+                  <th style="font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--accent-blue);padding:9px 10px;text-align:left;white-space:nowrap;">ALLOCATION</th>
+                  <th style="font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--accent-blue);padding:9px 10px;text-align:left;white-space:nowrap;">SANCTION YEAR</th>
+                  <th style="font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--accent-blue);padding:9px 10px;text-align:right;white-space:nowrap;">LATEST COST (Rs.)</th>
+                  <th style="font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--accent-blue);padding:9px 10px;text-align:right;white-space:nowrap;">% SHARE</th>
+                  <th style="font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--accent-cyan);padding:9px 10px;text-align:right;white-space:nowrap;">GRANT AMOUNT (Rs.) *</th>
+                </tr>
+              </thead>
+              <tbody id="gd_alloc_body"></tbody>
+              <tfoot>
+                <tr style="background:var(--table-head-bg);border-top:1px solid var(--border-accent);">
+                  <td colspan="4" style="padding:9px 10px;font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--text-muted);letter-spacing:1px;">TOTALS</td>
+                  <td style="padding:9px 10px;text-align:right;font-family:Rajdhani,sans-serif;font-weight:700;font-size:13px;color:var(--accent-gold);" id="gd_foot_cost">—</td>
+                  <td style="padding:9px 10px;text-align:right;font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--text-muted);">100%</td>
+                  <td style="padding:9px 10px;text-align:right;font-family:Rajdhani,sans-serif;font-weight:700;font-size:13px;color:var(--accent-green);" id="gd_foot_grant">—</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+
+          <div style="margin-top:12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+            <div style="font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--text-muted);letter-spacing:1px;">QUICK DISTRIBUTE:</div>
+            <input class="form-input" type="number" id="gd_total_grant_input"
+              placeholder="Enter total grant amount to auto-distribute"
+              style="width:280px;font-size:12px;">
+            <span style="font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--text-muted);">→ pro-rata by latest cost</span>
+          </div>
+
+          <div style="display:flex;align-items:center;justify-content:flex-end;gap:14px;margin-top:20px;padding-top:14px;border-top:1px solid var(--border);">
+            <div id="gd_submit_msg" style="font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--text-muted);flex:1;"></div>
+            <button class="btn-warn" id="gd_clear_btn">CLEAR</button>
+            <button class="btn-save-settings" id="gd_submit_btn" style="width:200px;">SAVE TO DATABASE</button>
+          </div>
+        </div>
+
+      </div>
+      <!-- ══════════ CHRONOLOG ══════════ -->
+      <div class="stab-content" id="utab-chronolog">
+        <div class="settings-section">
+          <div class="settings-section-title">
+            CHRONOLOG — EVENT TIMELINE
+            <span style="font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--text-muted);font-weight:normal;margin-left:12px;">Record and view chronological events against any procurement item</span>
+          </div>
+
+          <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px;">
+            <div class="form-group">
+              <label class="form-label" id="cl_lbl_up">UNDER POWER</label>
+              <select class="filter-select" id="cl_under_power" style="width:100%;">
+                <option value="">-- SELECT --</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" id="cl_lbl_sh">SANCTION HEADER</label>
+              <select class="filter-select" id="cl_sanction" style="width:100%;">
+                <option value="">-- SELECT --</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" id="cl_lbl_li">LINE ITEM</label>
+              <select class="filter-select" id="cl_line_item" style="width:100%;">
+                <option value="">-- SELECT --</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" id="cl_lbl_si">SUB ITEM</label>
+              <select class="filter-select" id="cl_sub_item" style="width:100%;">
+                <option value="">-- SELECT --</option>
+              </select>
+            </div>
+          </div>
+
+          <div id="cl_level_indicator" style="display:none;
+            font-family:'Share Tech Mono',monospace;font-size:10px;letter-spacing:1px;
+            padding:8px 14px;border-radius:6px;margin-bottom:16px;
+            background:rgba(255,214,10,0.08);border:1px solid var(--accent-warn);
+            color:var(--accent-warn);">
+            RECORDING LEVEL: <strong id="cl_level_text">—</strong>
+          </div>
+
+          <div id="cl_entry_section" style="display:none;">
+            <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:8px;padding:16px;margin-bottom:16px;">
+              <div style="font-family:Rajdhani,sans-serif;font-weight:700;font-size:13px;letter-spacing:2px;color:var(--accent-cyan);margin-bottom:12px;">NEW EVENT ENTRY</div>
+              <div id="cl_entry_grid" style="display:grid;grid-template-columns:160px 1fr auto auto;gap:12px;align-items:end;">
+
+                <div class="form-group" style="margin:0;">
+                  <label class="form-label">EVENT DATE *</label>
+                  <input class="form-input" type="date" id="cl_event_date" style="font-size:12px;">
+                </div>
+
+                <div class="form-group" style="margin:0;">
+                  <label class="form-label">SUBJECT * <span id="cl_subject_count" style="color:var(--text-muted);font-size:9px;">(0/50)</span></label>
+                  <input class="form-input" type="text" id="cl_subject" maxlength="50"
+                    placeholder="Brief description of the event (max 50 chars)" style="font-size:12px;">
+                </div>
+
+                <div class="form-group" style="margin:0;">
+                  <label class="form-label">ATTACHMENT</label>
+                  <div style="display:flex;align-items:center;gap:8px;height:36px;">
+                    <input type="checkbox" id="cl_has_attachment" style="width:16px;height:16px;accent-color:var(--accent-cyan);cursor:pointer;">
+                    <label for="cl_has_attachment" style="font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--text-secondary);cursor:pointer;">Has File</label>
+                  </div>
+                </div>
+
+                <div class="form-group" style="margin:0;display:none;" id="cl_file_section">
+                  <label class="form-label">FILE <span style="color:var(--text-muted);font-size:9px;">(max 5MB)</span></label>
+                  <input type="file" id="cl_file_input"
+                    style="font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--text-secondary);width:180px;">
+                </div>
+
+              </div>
+
+              <div style="display:flex;align-items:center;gap:12px;margin-top:12px;">
+                <div id="cl_entry_status" style="font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--text-muted);flex:1;"></div>
+                <button id="cl_record_btn"
+                  style="background:linear-gradient(135deg,var(--accent-blue),var(--accent-cyan));
+                  border:none;color:var(--bg-dark);padding:8px 24px;border-radius:6px;cursor:pointer;
+                  font-family:Rajdhani,sans-serif;font-weight:700;font-size:13px;letter-spacing:2px;">
+                  ⊕ RECORD EVENT
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div id="cl_history_section" style="display:none;">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px;">
+              <div style="font-family:Rajdhani,sans-serif;font-weight:700;font-size:13px;letter-spacing:2px;color:var(--text-secondary);">
+                EVENT TIMELINE
+              </div>
+              <div style="display:flex;align-items:center;gap:14px;">
+                <label id="cl_syslog_toggle_wrap" style="display:none;align-items:center;gap:6px;font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--text-secondary);cursor:pointer;">
+                  <input type="checkbox" id="cl_include_syslogs" style="accent-color:var(--accent-cyan);">
+                  INCLUDE SYSTEM LOGS
+                </label>
+                <div id="cl_history_meta" style="font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--text-muted);"></div>
+              </div>
+            </div>
+            <div id="cl_history_list" style="display:flex;flex-direction:column;gap:8px;"></div>
+            <div id="cl_history_empty" style="display:none;text-align:center;padding:40px;
+              font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--text-muted);letter-spacing:1px;">
+              NO EVENTS RECORDED FOR THIS SELECTION
+            </div>
+            <div id="cl_history_loading" style="display:none;text-align:center;padding:30px;
+              font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--text-muted);letter-spacing:1px;">
+              LOADING EVENTS...
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<!-- ═══════════ NEW / EDIT BILL MODAL ═══════════ -->
+<div id="newBillModal" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.7);
+  backdrop-filter:blur(4px);align-items:center;justify-content:center;">
+  <div style="background:var(--bg-panel);border:1px solid var(--border-accent);border-radius:12px;
+    padding:28px;width:100%;max-width:520px;max-height:90vh;overflow-y:auto;position:relative;">
+    <button id="newBillCloseBtn" style="position:absolute;top:12px;right:16px;background:transparent;
+      border:none;color:var(--text-muted);cursor:pointer;font-size:18px;">✕</button>
+    <div id="newBillModalTitle" style="font-family:Rajdhani,sans-serif;font-weight:700;font-size:18px;letter-spacing:3px;
+      color:var(--accent-cyan);margin-bottom:4px;">ADD NEW BILL</div>
+    <div id="newBillSubItemLabel" style="font-family:'Share Tech Mono',monospace;font-size:9px;
+      color:var(--text-muted);letter-spacing:1px;margin-bottom:20px;"></div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+      <div class="form-group" style="grid-column:span 2;">
+        <label class="form-label">BILL NUMBER</label>
+        <input class="form-input" type="text" id="nb_bill_number" placeholder="e.g. BILL/2026/001">
+      </div>
+      <div class="form-group">
+        <label class="form-label">BILL DATE</label>
+        <input class="form-input" type="date" id="nb_bill_date">
+      </div>
+      <div class="form-group">
+        <label class="form-label">BILL AMOUNT (Rs.)</label>
+        <input class="form-input" type="number" step="0.01" id="nb_bill_amount" placeholder="0.00">
+      </div>
+      <div class="form-group" style="grid-column:span 2;">
+        <label class="form-label">BILL DESCRIPTION</label>
+        <input class="form-input" type="text" id="nb_bill_description" placeholder="Write 'Final' if last bill">
+      </div>
+      <div class="form-group">
+        <label class="form-label">CO6 NUMBER</label>
+        <input class="form-input" type="text" id="nb_co6_number" placeholder="—">
+      </div>
+      <div class="form-group">
+        <label class="form-label">CO6 DATE</label>
+        <input class="form-input" type="date" id="nb_co6_date">
+      </div>
+      <div class="form-group">
+        <label class="form-label">CO7 NUMBER</label>
+        <input class="form-input" type="text" id="nb_co7_number" placeholder="—">
+      </div>
+      <div class="form-group">
+        <label class="form-label">CO7 DATE</label>
+        <input class="form-input" type="date" id="nb_co7_date">
+      </div>
+      <div class="form-group">
+        <label class="form-label">PAYMENT DATE</label>
+        <input class="form-input" type="date" id="nb_payment_date">
+      </div>
+    </div>
+
+    <div style="margin-top:20px;display:flex;gap:10px;justify-content:flex-end;align-items:center;">
+      <div id="nb_status" style="font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--text-muted);flex:1;"></div>
+      <button id="newBillCancelBtn" style="background:transparent;border:1px solid var(--border);
+        color:var(--text-muted);padding:8px 16px;border-radius:6px;cursor:pointer;
+        font-family:'Share Tech Mono',monospace;font-size:10px;letter-spacing:1px;">CANCEL</button>
+      <button id="nb_save_btn"
+        style="background:linear-gradient(135deg,var(--accent-blue),var(--accent-cyan));border:none;
+        color:var(--bg-dark);padding:8px 20px;border-radius:6px;cursor:pointer;
+        font-family:Rajdhani,sans-serif;font-weight:700;font-size:13px;letter-spacing:2px;">
+        SAVE BILL
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════ VIEW ALL BILLS MODAL ═══════════ -->
+<div id="viewBillsModal" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.7);
+  backdrop-filter:blur(4px);align-items:center;justify-content:center;">
+  <div style="background:var(--bg-panel);border:1px solid var(--border-accent);border-radius:12px;
+    padding:28px;width:100%;max-width:900px;max-height:90vh;overflow-y:auto;position:relative;">
+    <button id="viewBillsCloseBtn" style="position:absolute;top:12px;right:16px;background:transparent;
+      border:none;color:var(--text-muted);cursor:pointer;font-size:18px;">✕</button>
+    <div style="font-family:Rajdhani,sans-serif;font-weight:700;font-size:18px;letter-spacing:3px;
+      color:var(--accent-blue);margin-bottom:4px;">BILL HISTORY</div>
+    <div id="viewBillsSubItemLabel" style="font-family:'Share Tech Mono',monospace;font-size:9px;
+      color:var(--text-muted);letter-spacing:1px;margin-bottom:20px;"></div>
+    <div id="viewBillsContent" style="overflow-x:auto;">
+      <table style="width:100%;border-collapse:collapse;font-size:11px;">
+        <thead>
+          <tr style="background:var(--table-head-bg);">
+            <th style="padding:8px;text-align:left;font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--text-muted);border-bottom:1px solid var(--border);">#</th>
+            <th style="padding:8px;text-align:left;font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--text-muted);border-bottom:1px solid var(--border);">BILL NO.</th>
+            <th style="padding:8px;text-align:left;font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--text-muted);border-bottom:1px solid var(--border);">BILL DATE</th>
+            <th style="padding:8px;text-align:right;font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--text-muted);border-bottom:1px solid var(--border);">AMOUNT</th>
+            <th style="padding:8px;text-align:left;font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--text-muted);border-bottom:1px solid var(--border);">DESCRIPTION</th>
+            <th style="padding:8px;text-align:left;font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--text-muted);border-bottom:1px solid var(--border);">CO6</th>
+            <th style="padding:8px;text-align:left;font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--text-muted);border-bottom:1px solid var(--border);">CO7</th>
+            <th style="padding:8px;text-align:left;font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--text-muted);border-bottom:1px solid var(--border);">PAYMENT DATE</th>
+            <th style="padding:8px;text-align:center;font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--text-muted);border-bottom:1px solid var(--border);">STATUS / ACTION</th>
+          </tr>
+        </thead>
+        <tbody id="viewBillsTableBody"></tbody>
+      </table>
+      <div id="viewBillsTotal" style="margin-top:12px;padding:10px;background:var(--bg-card);border-radius:6px;
+        font-family:'Share Tech Mono',monospace;font-size:11px;color:var(--accent-cyan);text-align:right;"></div>
+    </div>
+  </div>
+</div>
+
+<script type="module" src="drgsbc_updation.js"></script>
+</body>
+</html>

@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DRGSBC — Data Repair Tool</title>
+
+<script src="drgsbc_theme_sync.js"></script>
+<link rel="stylesheet" href="drgsbc_shared_theme.css">
+<link rel="stylesheet" href="core/theme.css">
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=Share+Tech+Mono&family=Exo+2:wght@300;400;600;700&display=swap" rel="stylesheet">
+
+<style>
+*{box-sizing:border-box;}
+body{margin:0;min-height:100vh;font-family:'Exo 2',sans-serif;}
+.topbar{position:sticky;top:0;z-index:50;background:var(--topbar-bg);border-bottom:1px solid var(--border);padding:14px 22px;box-shadow:var(--shadow-blue);display:flex;align-items:center;gap:18px;flex-wrap:wrap;}
+.topbar h1{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:18px;letter-spacing:3px;margin:0;color:var(--text-primary);white-space:nowrap;}
+.topbar h1 span{color:var(--accent-red);}
+.topbar .sub{font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--text-muted);letter-spacing:1px;}
+.session-badge{margin-left:auto;font-family:'Share Tech Mono',monospace;font-size:10px;letter-spacing:1px;color:var(--text-muted);white-space:nowrap;}
+.page-wrap{padding:22px;max-width:1700px;width:94%;margin:0 auto;}
+.panel{background:var(--bg-panel);border:1px solid var(--border);padding:20px;margin-bottom:20px;}
+.panel-title{font-family:Rajdhani,sans-serif;font-weight:600;font-size:13px;letter-spacing:2px;color:var(--text-muted);margin-bottom:14px;padding-bottom:8px;border-bottom:1px solid var(--border);}
+.warn-banner{background:rgba(255,56,96,0.08);border:1px solid rgba(255,56,96,0.3);border-left:3px solid var(--accent-red);padding:14px 18px;margin-bottom:20px;font-family:'Exo 2',sans-serif;font-size:12px;color:var(--text-secondary);line-height:1.7;}
+.warn-banner strong{color:var(--accent-red);}
+.btn{background:transparent;border:1px solid var(--accent-blue);color:var(--accent-blue);font-family:Rajdhani,sans-serif;font-weight:700;font-size:12px;letter-spacing:2px;padding:9px 20px;cursor:pointer;transition:all .2s;}
+.btn:hover{background:var(--accent-blue);color:var(--bg-dark);}
+.btn:disabled{opacity:0.4;cursor:default;}
+.btn-danger{border-color:var(--accent-red);color:var(--accent-red);}
+.btn-danger:hover{background:var(--accent-red);color:#fff;}
+.row{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:10px;}
+label.opt{display:flex;align-items:center;gap:6px;font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--text-secondary);cursor:pointer;}
+.status-line{font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--text-muted);min-height:16px;}
+.status-line.ok{color:var(--accent-green);}
+.status-line.err{color:var(--accent-red);}
+table{width:100%;border-collapse:collapse;font-size:11px;}
+th{font-family:'Share Tech Mono',monospace;font-size:9px;letter-spacing:1px;color:var(--accent-blue);padding:8px 10px;text-align:left;white-space:nowrap;position:sticky;top:0;background:var(--bg-panel);border-bottom:1px solid var(--border-accent);}
+td{padding:7px 10px;border-bottom:1px solid rgba(26,58,92,0.3);color:var(--text-secondary);white-space:nowrap;}
+.diff{color:var(--accent-gold);font-weight:600;}
+.same{color:var(--text-muted);}
+.table-wrap{max-height:60vh;overflow:auto;border:1px solid var(--border);}
+.summary-pill{font-family:'Share Tech Mono',monospace;font-size:10px;background:rgba(0,180,216,0.1);border:1px solid rgba(0,180,216,0.3);color:var(--accent-cyan);padding:4px 12px;border-radius:2px;}
+</style>
+</head>
+<body>
+<script>if (window.self !== window.top) document.documentElement.classList.add('embedded');</script>
+
+<div class="topbar">
+  <h1>DRGSBC <span>DATA REPAIR</span></h1>
+  <div class="sub">Recalculates Status · Process Stage · Pending With · Process PDC · Next Due — ADMIN/MASTER ONLY</div>
+  <div class="session-badge" id="sessionBadge">CHECKING SESSION…</div>
+</div>
+
+<div class="page-wrap" id="pageWrap">
+  <div class="warn-banner">
+    <strong>⚠ This tool writes directly to sanction_sub_item.status and process_detail.</strong>
+    It recomputes these fields from existing dates using the exact same rules as the live Process tab
+    (the 13-step status waterfall + process_tat schedule rules). Always run ANALYZE first and review the
+    preview table before APPLY. Rows with no differences are not touched. Terminal states already set to
+    <strong>On Hold</strong> / <strong>Dropped</strong> in process_stage are preserved, not recalculated over.
+  </div>
+
+  <div class="panel">
+    <div class="panel-title">SCOPE &amp; OPTIONS</div>
+    <div class="row">
+      <label class="opt"><input type="checkbox" id="optOnlyBlank"> Only fix rows where status/process_stage is currently blank (safer, skips anything already set)</label>
+    </div>
+    <div class="row">
+      <label class="opt"><input type="checkbox" id="optOnlyMissingLi"> Also show line items with missing li_code (informational — use the SQL backfill to actually fill these)</label>
+    </div>
+    <div class="row">
+      <button class="btn" id="btnAnalyze">1 · ANALYZE (dry run)</button>
+      <button class="btn btn-danger" id="btnApply" disabled>2 · APPLY FIXES</button>
+      <span class="summary-pill" id="summaryPill" style="display:none;"></span>
+    </div>
+    <div class="status-line" id="statusLine"></div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-title">PREVIEW</div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>#</th><th>SUB-ITEM</th><th>LI CODE</th>
+            <th>STATUS (current → new)</th>
+            <th>PROCESS STAGE (current → new)</th>
+            <th>PENDING WITH (current → new)</th>
+            <th>PROCESS PDC (current → new)</th>
+            <th>NEXT DUE ON (current → new)</th>
+          </tr>
+        </thead>
+        <tbody id="previewBody">
+          <tr><td colspan="8" style="text-align:center;padding:30px;color:var(--text-muted);font-family:'Share Tech Mono',monospace;">CLICK ANALYZE TO BEGIN</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+import { getActiveSession, isAdminRole, nxFetch, getDbConfig, renderAuthGate, showToast } from './core/services.js';
+
+function renderSessionBadge() {
+  const el = document.getElementById('sessionBadge');
+  const session = getActiveSession();
+  el.textContent = session ? `${(session.user||'').toUpperCase()} · ${(session.role||'').toUpperCase()}` : 'NOT SIGNED IN';
+}
+renderSessionBadge();
+
+function gateOk() {
+  const session = getActiveSession();
+  if (!renderAuthGate(document.getElementById('pageWrap'), 'stab:users')) return false; // reuse an admin-only permission key
+  if (!isAdminRole(session)) {
+    document.getElementById('pageWrap').innerHTML = '<div style="padding:60px;text-align:center;font-family:\'Share Tech Mono\',monospace;color:var(--accent-red);">ADMIN / MASTER ONLY</div>';
+    return false;
+  }
+  return true;
+}
+
+/* ================================================================
+   siCalcStatus — copied verbatim from drgsbc_updation.js so the
+   repair tool computes the SAME answer the live Process tab would.
+   ================================================================ */
+function siCalcStatus(subItem, procDetail, billDetail) {
+  const ps  = procDetail?.process_stage    || '';
+  const co7 = billDetail?.co7_date         || '';
+  const co6 = billDetail?.co6_date         || '';
+  const crn = procDetail?.crn_date         || '';
+  const del = procDetail?.delivery_date    || '';
+  const loa = procDetail?.loa_po_date      || '';
+  const tco = procDetail?.tender_opened_on || '';
+  const tca = procDetail?.tender_called_on || '';
+  const ind = procDetail?.indent_date      || '';
+  const dve = procDetail?.de_vetted_on     || subItem?.de_vetted_on   || '';
+  const dsu = procDetail?.de_submit_date   || subItem?.de_submit_date || '';
+  const san = subItem?.sanctioned_on       || '';
+  if (ps === 'Dropped') return 'Dropped';
+  if (ps === 'On Hold') return 'On Hold';
+  if (co7) return 'Bill Passed';
+  if (co6) return 'Bill Submitted';
+  if (crn) return 'CRN Generated';
+  if (del) return 'Item Delivered';
+  if (loa) return 'PO/LOA Issued';
+  if (tco) return 'Under TC';
+  if (tca) return 'Tender Called';
+  if (ind) return 'Indent Submitted';
+  if (dve) return 'DE Vetted';
+  if (dsu) return 'DE Submitted';
+  if (san) return 'Indent Under Prep';
+  return 'Sanctioned';
+}
+
+function addDays(dateStr, days) {
+  if (!dateStr || !days) return dateStr || '';
+  const d = new Date(dateStr);
+  d.setDate(d.getDate() + Math.round(days));
+  return d.toISOString().slice(0, 10);
+}
+
+// Same lookup shape as pdRecalcFromTat() in drgsbc_updation.js.
+function computeSchedule(tat, row) {
+  const stageRow = tat.find(t => t.status === row.process_stage);
+  if (!stageRow) return { pendingWith: row.pending_with || '', processPdc: row.process_pdc || '', nextDueOn: row.next_process_due_on || '' };
+
+  const fieldName = stageRow.trigger_field;
+  const isLog     = (stageRow.reference === 'log()' || stageRow.reference === 'today()');
+  const todayStr  = new Date().toISOString().split('T')[0];
+  const baseDate  = isLog ? todayStr : (row[fieldName] || todayStr);
+  const curSeq    = stageRow.priority;
+  const pendingWith = stageRow.pending_with || '—';
+
+  let totalTat = 0;
+  tat.filter(t => t.priority >= curSeq && t.priority <= 20).forEach(t => totalTat += (parseFloat(t.tat_days) || 0));
+  const processPdc = baseDate ? addDays(baseDate, totalTat) : '';
+
+  const nextRow = tat.find(t => t.priority === curSeq + 1);
+  let nextDueOn = '';
+  if (nextRow) {
+    const nextFieldName = nextRow.trigger_field;
+    const nextIsLog     = (nextRow.reference === 'log()' || nextRow.reference === 'today()');
+    const nextBaseDate  = nextIsLog ? todayStr : (row[nextFieldName] || baseDate);
+    const nextTat       = parseFloat(nextRow.tat_days) || 0;
+    nextDueOn = nextBaseDate ? addDays(nextBaseDate, nextTat) : '';
+  }
+  return { pendingWith, processPdc, nextDueOn };
+}
+
+// Same rule pdSaveAll() uses to auto-pick a process_stage once a new
+// status is known: first process_tat row matching that status, lowest priority.
+function deriveStageFromStatus(tat, status) {
+  const rows = tat.filter(t => t.status === status).sort((a, b) => (a.priority || 0) - (b.priority || 0));
+  return rows[0]?.process_stage || null;
+}
+
+let PLAN = []; // computed diffs, built by analyze()
+
+async function fetchAll() {
+  const cfg = getDbConfig();
+  if (!cfg?.nexus?.url || !cfg?.nexus?.key) throw new Error('No Nexus connection configured.');
+
+  const tat = await nxFetch('process_tat?select=*&order=priority.asc');
+
+  let rawSubItems = [];
+  let url = 'sanction_sub_item?select=' +
+    'sub_item_id,sub_item_name,status,de_submit_date,de_vetted_on,' +
+    'sanction_line_item!inner(line_item_id,li_code,sanction_header!inner(sanctioned_on)),' +
+    'process_detail(process_id,process_stage,process_pdc,next_process_due_on,pending_with,' +
+      'indent_date,tender_called_on,tender_opened_on,loa_po_date,delivery_date,crn_date),' +
+    'bill_detail(co6_date,co7_date)' +
+    '&order=sub_item_name.asc';
+
+  const PAGE_SIZE = 1000;
+  let offset = 0, batch;
+  do {
+    batch = await nxFetch(`${url}&offset=${offset}&limit=${PAGE_SIZE}`);
+    if (!Array.isArray(batch)) batch = [];
+    rawSubItems = rawSubItems.concat(batch);
+    offset += PAGE_SIZE;
+  } while (batch.length === PAGE_SIZE);
+
+  return { tat: tat || [], rows: rawSubItems };
+}
+
+function buildPlan(tat, rawRows, onlyBlank) {
+  const plan = [];
+  rawRows.forEach(r => {
+    const li = r.sanction_line_item || {};
+    const h  = li.sanction_header || {};
+    const pdRaw = r.process_detail;
+    const p  = Array.isArray(pdRaw) ? (pdRaw[0] || {}) : (pdRaw || {});
+    const bdArr = Array.isArray(r.bill_detail) ? r.bill_detail : (r.bill_detail ? [r.bill_detail] : []);
+    const bd = bdArr.length ? bdArr[bdArr.length - 1] : {};
+
+    if (onlyBlank && r.status && p.process_stage) return; // nothing to fix, skip
+
+    const subItem = { sanctioned_on: h.sanctioned_on, de_submit_date: r.de_submit_date, de_vetted_on: r.de_vetted_on };
+    const procDetail = {
+      process_stage: p.process_stage || '', indent_date: p.indent_date || '', tender_called_on: p.tender_called_on || '',
+      tender_opened_on: p.tender_opened_on || '', loa_po_date: p.loa_po_date || '', delivery_date: p.delivery_date || '',
+      crn_date: p.crn_date || '',
+    };
+    const billDetail = { co6_date: bd.co6_date || '', co7_date: bd.co7_date || '' };
+
+    const newStatus = siCalcStatus(subItem, procDetail, billDetail);
+    // Preserve an existing process_stage if it's already a terminal
+    // manual override (On Hold / Dropped) — siCalcStatus already
+    // reads ps from procDetail.process_stage for that, so newStatus
+    // will correctly already be 'On Hold'/'Dropped' in that case and
+    // deriveStageFromStatus will map it straight back.
+    const newStage = deriveStageFromStatus(tat, newStatus) || p.process_stage || '';
+
+    const scheduleRow = {
+      process_stage: newStage,
+      indent_date: p.indent_date || '', tender_called_on: p.tender_called_on || '',
+      tender_opened_on: p.tender_opened_on || '', loa_po_date: p.loa_po_date || '',
+      delivery_date: p.delivery_date || '', crn_date: p.crn_date || '',
+      pending_with: p.pending_with || '', process_pdc: p.process_pdc || '', next_process_due_on: p.next_process_due_on || '',
+    };
+    const sched = computeSchedule(tat, scheduleRow);
+
+    const changed =
+      newStatus !== (r.status || '') ||
+      newStage !== (p.process_stage || '') ||
+      sched.pendingWith !== (p.pending_with || '') ||
+      sched.processPdc !== (p.process_pdc || '') ||
+      sched.nextDueOn !== (p.next_process_due_on || '');
+
+    if (!changed) return;
+
+    plan.push({
+      sub_item_id: r.sub_item_id, sub_item_name: r.sub_item_name, li_code: li.li_code || '',
+      process_id: p.process_id || null,
+      cur: { status: r.status || '', stage: p.process_stage || '', pw: p.pending_with || '', pdc: p.process_pdc || '', ndo: p.next_process_due_on || '' },
+      next: { status: newStatus, stage: newStage, pw: sched.pendingWith, pdc: sched.processPdc, ndo: sched.nextDueOn },
+    });
+  });
+  return plan;
+}
+
+function cell(curVal, nextVal) {
+  const c = curVal || '—', n = nextVal || '—';
+  return c === n ? `<span class="same">${c}</span>` : `<span class="diff">${c} → ${n}</span>`;
+}
+
+function renderPreview(plan) {
+  const body = document.getElementById('previewBody');
+  if (!plan.length) {
+    body.innerHTML = `<tr><td colspan="8" style="text-align:center;padding:30px;color:var(--accent-green);font-family:'Share Tech Mono',monospace;">NO DIFFERENCES FOUND — NOTHING TO FIX</td></tr>`;
+    return;
+  }
+  body.innerHTML = plan.map((row, i) => `
+    <tr>
+      <td>${i + 1}</td>
+      <td style="color:var(--text-primary);">${row.sub_item_name}</td>
+      <td>${row.li_code || '—'}</td>
+      <td>${cell(row.cur.status, row.next.status)}</td>
+      <td>${cell(row.cur.stage, row.next.stage)}</td>
+      <td>${cell(row.cur.pw, row.next.pw)}</td>
+      <td>${cell(row.cur.pdc, row.next.pdc)}</td>
+      <td>${cell(row.cur.ndo, row.next.ndo)}</td>
+    </tr>`).join('');
+}
+
+async function analyze() {
+  const statusEl = document.getElementById('statusLine');
+  const btnA = document.getElementById('btnAnalyze');
+  const btnB = document.getElementById('btnApply');
+  const pill = document.getElementById('summaryPill');
+  btnA.disabled = true; btnB.disabled = true;
+  statusEl.className = 'status-line';
+  statusEl.textContent = '⏳ Fetching data and computing...';
+  pill.style.display = 'none';
+
+  try {
+    const { tat, rows } = await fetchAll();
+    if (!tat.length) throw new Error('process_tat table is empty or unreachable — cannot compute schedules.');
+    const onlyBlank = document.getElementById('optOnlyBlank').checked;
+    PLAN = buildPlan(tat, rows, onlyBlank);
+    renderPreview(PLAN);
+    statusEl.className = 'status-line ok';
+    statusEl.textContent = `✓ Analyzed ${rows.length} sub-items · ${PLAN.length} need changes`;
+    pill.style.display = '';
+    pill.textContent = `${PLAN.length} ROW(S) TO FIX`;
+    btnB.disabled = PLAN.length === 0;
+  } catch (e) {
+    statusEl.className = 'status-line err';
+    statusEl.textContent = '✕ ' + e.message;
+    showToast('ANALYZE FAILED: ' + e.message.slice(0, 60), 'error');
+  }
+  btnA.disabled = false;
+}
+
+async function apply() {
+  if (!PLAN.length) return;
+  if (!confirm(`Apply ${PLAN.length} change(s) to sanction_sub_item + process_detail? This writes to the live database.`)) return;
+
+  const statusEl = document.getElementById('statusLine');
+  const btnB = document.getElementById('btnApply');
+  btnB.disabled = true;
+  let ok = 0, err = 0;
+
+  for (const row of PLAN) {
+    try {
+      await nxFetch(`sanction_sub_item?sub_item_id=eq.${row.sub_item_id}`, {
+        method: 'PATCH', body: { status: row.next.status, updated_at: new Date().toISOString() }, prefer: 'return=minimal',
+      });
+
+      const pdBody = {
+        process_stage: row.next.stage, pending_with: row.next.pw,
+        process_pdc: row.next.pdc || null, next_process_due_on: row.next.ndo || null,
+        updated_at: new Date().toISOString(),
+      };
+      if (row.process_id) {
+        await nxFetch(`process_detail?process_id=eq.${row.process_id}`, { method: 'PATCH', body: pdBody, prefer: 'return=minimal' });
+      } else {
+        await nxFetch('process_detail', {
+          method: 'POST',
+          body: { sub_item_id: row.sub_item_id, owner_sse: '—', created_at: new Date().toISOString(), ...pdBody },
+          prefer: 'return=minimal',
+        });
+      }
+      ok++;
+    } catch (e) {
+      console.error('[repair] failed for sub_item_id', row.sub_item_id, e);
+      err++;
+    }
+    statusEl.className = 'status-line';
+    statusEl.textContent = `⏳ Applying... ${ok + err}/${PLAN.length} (${err} errors)`;
+  }
+
+  statusEl.className = err ? 'status-line err' : 'status-line ok';
+  statusEl.textContent = `${err ? '⚠' : '✓'} Applied ${ok} · Failed ${err}`;
+  showToast(`REPAIR DONE: ${ok} FIXED, ${err} ERRORS`, err ? 'error' : 'success');
+  PLAN = [];
+  btnB.disabled = true;
+}
+
+document.getElementById('btnAnalyze').addEventListener('click', analyze);
+document.getElementById('btnApply').addEventListener('click', apply);
+
+if (gateOk()) { /* ready */ }
+window.addEventListener('storage', (e) => { if (e.key && e.key.startsWith('drgsbc_')) { renderSessionBadge(); } });
+</script>
+</body>
+</html>

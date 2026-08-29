@@ -1,0 +1,21 @@
+{
+  "current_version": "1.26.0",
+  "released": "2026-06-20",
+  "dashboard_path": "/volume1/@appdata/ContainerManager/all_shares/web/Site/dashboard/drgsbc_dashboard_v16.html",
+  "dashboard_url": "http://10.205.50.15:8088/drgsbc_dashboard_v16.html",
+  "changelog": [
+    {
+      "version": "1.26.0",
+      "date": "2026-06-20",
+      "notes": "V16 — Summary, PDF export, Supabase → Nexus throughout."
+    },
+    {
+      "version": "1.25.0",
+      "date": "2026-06-17",
+      "notes": "Logic Enabled - 1.25.0"
+    }
+  ],
+  "api_base": "http://10.205.50.15:3000",
+  "dsm_url": "http://10.205.50.15:5000",
+  "nas_ip": "10.205.50.15"
+}

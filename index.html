@@ -1,0 +1,606 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DRGSBC Shell</title>
+<link rel="icon" href="favicon.ico">
+
+<!-- Theme sync + shared theme now live IN /shell/ — fully self-contained.
+     If you ever move this whole folder, these come with it.
+     theme_sync.js sets data-theme on <html> from localStorage before
+     any stylesheet paints, so there's no flash of the wrong theme. -->
+<script src="drgsbc_theme_sync.js"></script>
+<link rel="stylesheet" href="drgsbc_shared_theme.css">
+<!-- core/theme.css carries the SAME 9 palettes under v16's own native
+     variable names (--bg-dark/--accent-cyan/--text-primary/...), plus
+     shell chrome + shared component classes. See its header comment
+     for why both theme files are loaded together. -->
+<link rel="stylesheet" href="core/theme.css">
+
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=Share+Tech+Mono&family=Exo+2:wght@300;400;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+
+<div class="shell-topbar">
+  <div class="shell-brand" id="shellBrand" title="Go to My Space" style="cursor:pointer;">DRGSBC <span>SHELL</span></div>
+  <nav class="shell-nav" id="shell-nav"></nav>
+  <div class="shell-user-wrap" id="shell-user">
+    <span class="user-avatar" id="userAvatar"></span>
+    <span class="user-name" id="userMetaName"></span>
+    <span class="user-role-pill" id="userMetaRole"></span>
+    <button class="user-action-btn" id="userMenuSignOut" title="Sign out">LOGOUT</button>
+    <button class="user-action-icon" id="userMenuChangePass" title="Change password">
+      <svg viewBox="0 0 20 20" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="14" r="3.2"/><line x1="8.3" y1="11.7" x2="17" y2="3"/><line x1="13" y1="7" x2="15.2" y2="9.2"/><line x1="15.7" y1="4.3" x2="17.7" y2="6.3"/></svg>
+    </button>
+    <button class="user-signin-btn" id="userSignInBtn" style="display:none;">SIGN IN</button>
+  </div>
+</div>
+
+<div class="modal-overlay" id="loginModal">
+  <div class="auth-glass">
+    <div class="auth-visual">
+      <div class="auth-visual-grid"></div>
+      <div class="auth-visual-glow"></div>
+      <div class="auth-visual-content">
+        <div class="auth-visual-mark">DRGSBC <span>SHELL</span></div>
+        <div class="auth-visual-tag">MECHANICAL ASSETS PROCUREMENT &middot; SBC DIVISION</div>
+        <div class="auth-visual-rule"></div>
+        <ul class="auth-visual-list">
+          <li>Sanction &amp; grant tracking</li>
+          <li>Procurement &amp; billing lifecycle</li>
+          <li>Full audit trail</li>
+        </ul>
+      </div>
+    </div>
+    <div class="auth-form">
+      <button class="modal-close" id="loginModalClose">×</button>
+
+      <div id="authSignInView">
+        <div class="modal-title">SIGN IN</div>
+        <div class="modal-subtitle">AUTHENTICATE TO CONTINUE</div>
+        <div class="error-msg" id="loginErr"></div>
+        <div class="field-group">
+          <input class="field-input" id="loginUser" type="text" placeholder=" " autocomplete="username">
+          <label class="field-label" for="loginUser">USERNAME</label>
+        </div>
+        <div class="field-group">
+          <input class="field-input" id="loginPass" type="password" placeholder=" " autocomplete="current-password">
+          <label class="field-label" for="loginPass">PASSWORD</label>
+        </div>
+        <button class="btn-submit" id="loginSubmit">AUTHENTICATE →</button>
+        <div class="login-hint" id="loginStatus"></div>
+        <div class="auth-dbsetup-link" id="authDbSetupLink">⚙ Database connection not working? Set it up here</div>
+      </div>
+
+      <div id="authDbSetupView" style="display:none;">
+        <div class="modal-title">DATABASE <span style="color:var(--accent-cyan)">SETUP</span></div>
+        <div class="modal-subtitle">FIRST-TIME CONNECTION TO NEXUS</div>
+        <div class="auth-dbsetup-note">
+          No database connection is configured on this device yet, so there's nothing to sign in against. Upload the config file you were given, or enter the Nexus URL and key directly below.
+        </div>
+        <div class="error-msg" id="dbSetupErr"></div>
+        <label class="auth-file-drop" for="authDbConfigFile">
+          <span id="authDbConfigFileLabel">Click to choose a config file (.txt)</span>
+          <input type="file" id="authDbConfigFile" accept=".txt" style="display:none;">
+        </label>
+        <div id="authDbConfigPreview" style="display:none;"></div>
+        <div class="auth-dbsetup-divider">— or enter manually —</div>
+        <div class="field-group">
+          <input class="field-input" id="authDbUrl" type="text" placeholder=" " autocomplete="off">
+          <label class="field-label" for="authDbUrl">NEXUS URL</label>
+        </div>
+        <div class="field-group">
+          <input class="field-input" id="authDbKey" type="text" placeholder=" " autocomplete="off">
+          <label class="field-label" for="authDbKey">NEXUS ANON KEY</label>
+        </div>
+        <button class="btn-submit" id="authDbSetupSave">SAVE & CONTINUE →</button>
+        <div class="login-hint" id="authDbSetupStatus"></div>
+        <div class="auth-dbsetup-link" id="authBackToSignIn">← Back to sign in</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="changePwModal">
+  <div class="auth-form-solo">
+    <button class="modal-close" id="changePwModalClose">×</button>
+    <div class="modal-title">CHANGE <span style="color:var(--accent-cyan)">PASSWORD</span></div>
+    <div class="modal-subtitle">UPDATE YOUR LOGIN PASSWORD</div>
+    <div class="error-msg" id="cpErr"></div>
+    <div class="field-group">
+      <input class="field-input" id="cpCurrent" type="password" placeholder=" " autocomplete="current-password">
+      <label class="field-label" for="cpCurrent">CURRENT PASSWORD</label>
+    </div>
+    <div class="field-group">
+      <input class="field-input" id="cpNew" type="password" placeholder=" " autocomplete="new-password">
+      <label class="field-label" for="cpNew">NEW PASSWORD (MIN 8 CHARS)</label>
+    </div>
+    <div class="field-group">
+      <input class="field-input" id="cpConfirm" type="password" placeholder=" " autocomplete="new-password">
+      <label class="field-label" for="cpConfirm">CONFIRM NEW PASSWORD</label>
+    </div>
+    <button class="btn-submit" id="cpSubmit">UPDATE PASSWORD →</button>
+    <div class="login-hint" id="cpStatus"></div>
+  </div>
+</div>
+
+<style>
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(4,8,15,0.85);backdrop-filter:blur(6px);z-index:1000;align-items:center;justify-content:center;}
+.modal-overlay.active{display:flex;}
+@keyframes modalin{from{opacity:0;transform:translateY(-16px) scale(0.97);}to{opacity:1;transform:none;}}
+
+/* ── Glass split-panel login ── */
+.auth-glass{
+  display:flex;width:680px;max-width:92vw;min-height:420px;
+  background:var(--modal-bg);border:1px solid var(--border-accent);box-shadow:var(--shadow-blue);
+  position:relative;animation:modalin 0.35s ease;overflow:hidden;
+}
+.auth-visual{
+  flex:1;position:relative;display:flex;align-items:center;justify-content:center;padding:36px;
+  background:linear-gradient(160deg,rgba(0,180,216,0.16),rgba(0,245,212,0.05) 60%,transparent);
+  border-right:1px solid var(--border-accent);overflow:hidden;
+}
+.auth-visual-grid{
+  position:absolute;inset:0;opacity:0.35;
+  background-image:linear-gradient(var(--border-accent) 1px,transparent 1px),linear-gradient(90deg,var(--border-accent) 1px,transparent 1px);
+  background-size:28px 28px;
+  -webkit-mask-image:radial-gradient(circle at 50% 40%,black 0%,transparent 75%);
+  mask-image:radial-gradient(circle at 50% 40%,black 0%,transparent 75%);
+}
+.auth-visual-glow{
+  position:absolute;width:280px;height:280px;border-radius:50%;top:-60px;left:-60px;
+  background:radial-gradient(circle,var(--accent-cyan) 0%,transparent 70%);opacity:0.18;filter:blur(10px);
+  animation:authGlowDrift 9s ease-in-out infinite alternate;
+}
+@keyframes authGlowDrift{from{transform:translate(0,0);}to{transform:translate(40px,60px);}}
+.auth-visual-content{position:relative;z-index:1;text-align:left;}
+.auth-visual-mark{font-family:Rajdhani,sans-serif;font-weight:700;font-size:24px;letter-spacing:3px;color:var(--text-primary);}
+.auth-visual-mark span{color:var(--accent-cyan);}
+.auth-visual-tag{font-family:'Share Tech Mono',monospace;font-size:9px;letter-spacing:1.5px;color:var(--text-muted);margin-top:6px;}
+.auth-visual-rule{width:42px;height:2px;background:linear-gradient(90deg,var(--accent-blue),var(--accent-cyan));margin:20px 0;}
+.auth-visual-list{list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:9px;}
+.auth-visual-list li{
+  font-family:'Exo 2',sans-serif;font-size:12px;color:var(--text-secondary);padding-left:16px;position:relative;
+}
+.auth-visual-list li::before{
+  content:'';position:absolute;left:0;top:6px;width:6px;height:6px;background:var(--accent-cyan);
+  clip-path:polygon(50% 0%,100% 50%,50% 100%,0% 50%);
+}
+.auth-form{flex:1.15;padding:36px 40px;position:relative;display:flex;flex-direction:column;}
+.auth-form-solo{
+  width:380px;max-width:92vw;background:var(--modal-bg);border:1px solid var(--border-accent);
+  box-shadow:var(--shadow-blue);padding:32px;position:relative;animation:modalin 0.3s ease;
+}
+.auth-form::before,.auth-form-solo::before{
+  content:'';position:absolute;top:0;left:0;right:0;height:3px;
+  background:linear-gradient(90deg,var(--accent-blue),var(--accent-cyan));
+}
+.modal-close{position:absolute;top:12px;right:14px;background:none;border:none;color:var(--text-muted);font-size:20px;cursor:pointer;transition:color 0.2s;line-height:1;}
+.modal-close:hover{color:var(--accent-red);}
+.modal-title{font-family:Rajdhani,sans-serif;font-weight:700;font-size:19px;letter-spacing:2px;color:var(--text-primary);}
+.modal-subtitle{font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--text-muted);letter-spacing:2px;margin-top:4px;margin-bottom:24px;}
+.error-msg{background:rgba(255,56,96,0.1);border:1px solid var(--accent-red);color:var(--accent-red);font-family:'Share Tech Mono',monospace;font-size:10px;padding:7px 10px;margin-bottom:14px;display:none;letter-spacing:1px;}
+.error-msg.show{display:block;}
+
+/* ── Floating-label fields ── */
+.field-group{position:relative;margin-bottom:22px;}
+.field-input{
+  width:100%;background:rgba(127,127,127,0.06);border:1px solid var(--border);border-bottom:2px solid var(--border);
+  color:var(--text-primary);font-family:'Exo 2',sans-serif;font-size:14px;padding:16px 12px 8px;outline:none;
+  transition:border-color 0.2s,background 0.2s;box-sizing:border-box;
+}
+.field-input:focus{border-bottom-color:var(--accent-cyan);background:rgba(127,127,127,0.1);}
+.field-label{
+  position:absolute;left:12px;top:14px;color:var(--text-muted);font-family:'Exo 2',sans-serif;font-size:13px;
+  pointer-events:none;transition:all 0.18s ease;background:transparent;padding:0 3px;
+}
+.field-input:focus + .field-label,
+.field-input:not(:placeholder-shown) + .field-label{
+  top:-7px;left:9px;font-size:9px;letter-spacing:1.5px;font-family:'Share Tech Mono',monospace;
+  color:var(--accent-cyan);background:var(--modal-bg);
+}
+
+.btn-submit{width:100%;background:linear-gradient(90deg,var(--accent-blue),var(--accent-cyan));border:none;color:var(--bg-dark);font-family:Rajdhani,sans-serif;font-weight:700;font-size:14px;letter-spacing:3px;padding:11px;cursor:pointer;transition:opacity 0.2s;margin-top:4px;}
+.btn-submit:hover{opacity:0.85;}
+.btn-submit:disabled{opacity:0.5;cursor:default;}
+.login-hint{font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--text-muted);margin-top:12px;text-align:center;letter-spacing:1px;}
+
+.auth-dbsetup-link{
+  font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--text-muted);letter-spacing:0.5px;
+  margin-top:16px;text-align:center;cursor:pointer;transition:color 0.2s;
+}
+.auth-dbsetup-link:hover{color:var(--accent-cyan);}
+.auth-dbsetup-note{
+  font-family:'Exo 2',sans-serif;font-size:11px;color:var(--text-secondary);line-height:1.6;margin-bottom:16px;
+}
+.auth-file-drop{
+  display:flex;align-items:center;justify-content:center;width:100%;box-sizing:border-box;
+  border:1.5px dashed var(--border-accent);padding:16px;cursor:pointer;text-align:center;
+  font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--accent-cyan);letter-spacing:0.5px;
+  transition:border-color 0.2s,background 0.2s;margin-bottom:10px;
+}
+.auth-file-drop:hover{border-color:var(--accent-cyan);background:rgba(0,180,216,0.06);}
+.auth-dbsetup-divider{
+  font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--text-muted);text-align:center;
+  letter-spacing:1px;margin:14px 0;
+}
+
+@media (max-width:700px){
+  .auth-visual{display:none;}
+  .auth-glass{width:380px;}
+  .auth-form{padding:32px;}
+}
+
+/* ── User badge: avatar + name + role pill + logout + key, all inline ── */
+.shell-user-wrap{margin-left:auto;display:flex;align-items:center;gap:10px;}
+.user-avatar{
+  width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;
+  font-family:Rajdhani,sans-serif;font-weight:700;font-size:12px;letter-spacing:0.5px;
+  background:var(--accent-blue);color:var(--bg-dark);
+}
+.user-name{font-family:Rajdhani,sans-serif;font-weight:700;font-size:14px;letter-spacing:0.5px;color:var(--text-primary);white-space:nowrap;}
+.user-role-pill{
+  font-family:'Share Tech Mono',monospace;font-weight:700;font-size:9px;letter-spacing:1.5px;
+  background:transparent;padding:4px 10px;border-radius:4px;border:1.5px solid currentColor;white-space:nowrap;
+}
+.user-action-btn{
+  background:transparent;border:1.5px solid var(--accent-red);color:var(--accent-red);
+  font-family:'Share Tech Mono',monospace;font-weight:700;font-size:9px;letter-spacing:1.5px;
+  padding:5px 12px;border-radius:4px;cursor:pointer;transition:all 0.15s;white-space:nowrap;
+}
+.user-action-btn:hover{background:var(--accent-red);color:var(--bg-dark);}
+.user-action-icon{
+  background:transparent;border:1.5px solid var(--accent-gold);color:var(--accent-gold);
+  width:28px;height:28px;border-radius:4px;display:flex;align-items:center;justify-content:center;
+  cursor:pointer;transition:all 0.15s;flex-shrink:0;
+}
+.user-action-icon:hover{background:var(--accent-gold);color:var(--bg-dark);}
+.user-signin-btn{
+  background:transparent;border:1.5px solid var(--accent-blue);color:var(--accent-blue);
+  font-family:'Share Tech Mono',monospace;font-weight:700;font-size:10px;letter-spacing:1.5px;
+  padding:7px 16px;border-radius:4px;cursor:pointer;transition:all 0.15s;
+}
+.user-signin-btn:hover{background:var(--accent-blue);color:var(--bg-dark);}
+</style>
+
+<main class="shell-content" id="shell-content">
+  <div class="shell-loading">Loading…</div>
+</main>
+
+<script type="module">
+import { PAGES } from './pages/registry.js';
+import { getActiveSession, showToast, performLogin, performLogout, changePassword, ROLE_COLOR, getDbConfig, dbConfigParseText } from './core/services.js';
+
+const navEl     = document.getElementById('shell-nav');
+const contentEl = document.getElementById('shell-content');
+const userMenuChangePass = document.getElementById('userMenuChangePass');
+const userMenuSignOut    = document.getElementById('userMenuSignOut');
+const userSignInBtn      = document.getElementById('userSignInBtn');
+const loginModal   = document.getElementById('loginModal');
+const loginErr      = document.getElementById('loginErr');
+const loginStatus   = document.getElementById('loginStatus');
+const loginUserInput = document.getElementById('loginUser');
+const loginPassInput = document.getElementById('loginPass');
+const loginSubmitBtn = document.getElementById('loginSubmit');
+const authSignInView   = document.getElementById('authSignInView');
+const authDbSetupView  = document.getElementById('authDbSetupView');
+const authDbSetupLink  = document.getElementById('authDbSetupLink');
+const authBackToSignIn = document.getElementById('authBackToSignIn');
+const authDbConfigFile = document.getElementById('authDbConfigFile');
+const authDbConfigFileLabel = document.getElementById('authDbConfigFileLabel');
+const authDbConfigPreview   = document.getElementById('authDbConfigPreview');
+const authDbUrlInput   = document.getElementById('authDbUrl');
+const authDbKeyInput   = document.getElementById('authDbKey');
+const authDbSetupSaveBtn = document.getElementById('authDbSetupSave');
+const authDbSetupErr   = document.getElementById('dbSetupErr');
+const authDbSetupStatus = document.getElementById('authDbSetupStatus');
+const changePwModal  = document.getElementById('changePwModal');
+const cpErr      = document.getElementById('cpErr');
+const cpStatus   = document.getElementById('cpStatus');
+const cpCurrentInput = document.getElementById('cpCurrent');
+const cpNewInput     = document.getElementById('cpNew');
+const cpConfirmInput = document.getElementById('cpConfirm');
+const cpSubmitBtn    = document.getElementById('cpSubmit');
+
+let active = null; // { id, destroy }
+
+// ── Shared context object passed to every page's render() ──
+const ctx = {
+  get session() { return getActiveSession(); },
+  navigateTo,
+};
+
+function initialsFor(name) {
+  const parts = (name || '').trim().split(/\s+/).filter(Boolean);
+  if (!parts.length) return '?';
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+
+const userAvatarEl = document.getElementById('userAvatar');
+const userMetaNameEl = document.getElementById('userMetaName');
+const userMetaRoleEl = document.getElementById('userMetaRole');
+
+function renderUserBadge() {
+  const session = getActiveSession();
+  if (session) {
+    const roleColor = ROLE_COLOR[session.role] || 'var(--accent-blue)';
+    userAvatarEl.style.display = '';
+    userMetaNameEl.style.display = '';
+    userMetaRoleEl.style.display = '';
+    userMenuSignOut.style.display = '';
+    userMenuChangePass.style.display = '';
+    userSignInBtn.style.display = 'none';
+
+    userAvatarEl.textContent = initialsFor(session.user);
+    userAvatarEl.style.background = roleColor;
+    userMetaNameEl.textContent = session.user || '';
+    userMetaRoleEl.textContent = (session.role || '').toUpperCase();
+    userMetaRoleEl.style.color = roleColor;
+  } else {
+    userAvatarEl.style.display = 'none';
+    userMetaNameEl.style.display = 'none';
+    userMetaRoleEl.style.display = 'none';
+    userMenuSignOut.style.display = 'none';
+    userMenuChangePass.style.display = 'none';
+    userSignInBtn.style.display = '';
+  }
+}
+
+function dbConfigIsValid(cfg) {
+  return !!(cfg && cfg.nexus && cfg.nexus.url && cfg.nexus.key);
+}
+
+function showSignInView() {
+  authDbSetupView.style.display = 'none';
+  authSignInView.style.display = '';
+  loginUserInput.focus();
+}
+
+function showDbSetupView() {
+  authSignInView.style.display = 'none';
+  authDbSetupView.style.display = '';
+  authDbSetupErr.classList.remove('show');
+  authDbSetupStatus.textContent = '';
+  const cfg = getDbConfig();
+  authDbUrlInput.value = cfg?.nexus?.url || '';
+  authDbKeyInput.value = cfg?.nexus?.key || '';
+  authDbConfigFileLabel.textContent = 'Click to choose a config file (.txt)';
+  authDbConfigPreview.style.display = 'none';
+}
+
+function openLoginModal() {
+  loginErr.classList.remove('show');
+  loginStatus.textContent = '';
+  loginUserInput.value = '';
+  loginPassInput.value = '';
+  loginModal.classList.add('active');
+  // First-time devices with no saved Nexus connection have nothing to
+  // authenticate against — land directly on setup instead of showing
+  // a sign-in form that can only ever fail.
+  if (dbConfigIsValid(getDbConfig())) {
+    showSignInView();
+  } else {
+    showDbSetupView();
+  }
+}
+function closeLoginModal() {
+  loginModal.classList.remove('active');
+}
+
+authDbConfigFile.addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  authDbConfigFileLabel.textContent = file.name;
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    try {
+      const parsed = dbConfigParseText(ev.target.result);
+      const urlVal = parsed['NEXUS_URL'] || '';
+      const keyVal = parsed['NEXUS_ANON_KEY'] || '';
+      if (!urlVal && !keyVal) {
+        authDbSetupErr.textContent = '⚠ NO VALID KEYS FOUND IN THIS FILE.';
+        authDbSetupErr.classList.add('show');
+        return;
+      }
+      authDbUrlInput.value = urlVal;
+      authDbKeyInput.value = keyVal;
+      authDbSetupErr.classList.remove('show');
+      authDbConfigPreview.style.display = '';
+      authDbConfigPreview.innerHTML = `
+        <div style="font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--accent-green);letter-spacing:1px;margin-bottom:4px;">✓ FILE LOADED — ${file.name}</div>
+        <div style="font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--text-muted);">URL: ${urlVal ? urlVal.slice(0, 40) + '…' : '(not set)'}</div>
+        <div style="font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--text-muted);">KEY: ${keyVal ? keyVal.slice(0, 16) + '…[hidden]' : '(not set)'}</div>
+      `;
+    } catch (err) {
+      authDbSetupErr.textContent = '⚠ COULD NOT READ THAT FILE: ' + err.message.toUpperCase();
+      authDbSetupErr.classList.add('show');
+    }
+  };
+  reader.readAsText(file);
+});
+
+authDbSetupSaveBtn.addEventListener('click', () => {
+  const url = authDbUrlInput.value.trim();
+  const key = authDbKeyInput.value.trim();
+  authDbSetupErr.classList.remove('show');
+  if (!url || !key) {
+    authDbSetupErr.textContent = '⚠ ENTER BOTH NEXUS URL AND KEY, OR UPLOAD A CONFIG FILE.';
+    authDbSetupErr.classList.add('show');
+    return;
+  }
+  const existing = getDbConfig() || {};
+  const cfg = { nexus: { url, key }, sheets: existing.sheets || { url: '' } };
+  localStorage.setItem('drgsbc_db_config', JSON.stringify(cfg));
+  authDbSetupStatus.style.color = 'var(--accent-green)';
+  authDbSetupStatus.textContent = '✓ SAVED — you can sign in now.';
+  showToast('DATABASE CONFIG SAVED');
+  setTimeout(showSignInView, 900);
+});
+
+authDbSetupLink.addEventListener('click', showDbSetupView);
+authBackToSignIn.addEventListener('click', showSignInView);
+
+async function submitLogin() {
+  loginErr.classList.remove('show');
+  loginStatus.style.color = 'var(--text-muted)';
+  loginStatus.textContent = '⟳ CHECKING CREDENTIALS...';
+  loginSubmitBtn.disabled = true;
+  try {
+    const session = await performLogin(loginUserInput.value, loginPassInput.value);
+    loginStatus.style.color = 'var(--accent-green)';
+    loginStatus.textContent = `✓ WELCOME ${session.user.toUpperCase()}`;
+    setTimeout(() => {
+      closeLoginModal();
+      renderUserBadge();
+      showToast('Signed in as ' + session.user);
+      // Re-render the active page so it picks up the new session
+      // immediately (iframed pages also self-refresh via their own
+      // 'storage' listener, since this write happens in THIS window).
+      navigateTo(active?.id || (PAGES[0] && PAGES[0].id));
+    }, 400);
+  } catch (err) {
+    loginStatus.textContent = '';
+    if (/database not configured/i.test(err.message)) {
+      showDbSetupView();
+      authDbSetupErr.textContent = '⚠ ' + err.message.toUpperCase();
+      authDbSetupErr.classList.add('show');
+      return;
+    }
+    loginErr.textContent = '⚠ ' + err.message.toUpperCase();
+    loginErr.classList.add('show');
+    loginPassInput.value = '';
+    loginPassInput.focus();
+  } finally {
+    loginSubmitBtn.disabled = false;
+  }
+}
+
+async function doSignOut() {
+  const session = getActiveSession();
+  if (!session || !confirm(`Sign out ${session.user}?`)) return;
+  await performLogout();
+  renderUserBadge();
+  showToast('Signed out');
+  navigateTo(active?.id || (PAGES[0] && PAGES[0].id));
+}
+
+function openChangePasswordModal() {
+  cpErr.classList.remove('show');
+  cpStatus.textContent = '';
+  cpCurrentInput.value = '';
+  cpNewInput.value = '';
+  cpConfirmInput.value = '';
+  cpSubmitBtn.disabled = false;
+  cpSubmitBtn.textContent = 'UPDATE PASSWORD →';
+  changePwModal.classList.add('active');
+  cpCurrentInput.focus();
+}
+function closeChangePasswordModal() {
+  changePwModal.classList.remove('active');
+}
+
+async function submitChangePassword() {
+  cpErr.classList.remove('show');
+  cpStatus.style.color = 'var(--text-muted)';
+  cpStatus.textContent = '⟳ VERIFYING CURRENT PASSWORD...';
+  cpSubmitBtn.disabled = true;
+  try {
+    await changePassword(cpCurrentInput.value, cpNewInput.value, cpConfirmInput.value);
+    cpStatus.style.color = 'var(--accent-green)';
+    cpStatus.textContent = '✓ PASSWORD UPDATED SUCCESSFULLY';
+    showToast('Password changed successfully');
+    setTimeout(closeChangePasswordModal, 1200);
+  } catch (err) {
+    cpStatus.textContent = '';
+    cpErr.textContent = '⚠ ' + err.message.toUpperCase();
+    cpErr.classList.add('show');
+  } finally {
+    cpSubmitBtn.disabled = false;
+    cpSubmitBtn.textContent = 'UPDATE PASSWORD →';
+  }
+}
+
+userSignInBtn.addEventListener('click', openLoginModal);
+userMenuChangePass.addEventListener('click', openChangePasswordModal);
+userMenuSignOut.addEventListener('click', doSignOut);
+document.getElementById('loginModalClose').addEventListener('click', closeLoginModal);
+loginModal.addEventListener('click', (e) => { if (e.target === loginModal) closeLoginModal(); });
+loginSubmitBtn.addEventListener('click', submitLogin);
+loginPassInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') submitLogin(); });
+loginUserInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') loginPassInput.focus(); });
+document.getElementById('changePwModalClose').addEventListener('click', closeChangePasswordModal);
+changePwModal.addEventListener('click', (e) => { if (e.target === changePwModal) closeChangePasswordModal(); });
+cpSubmitBtn.addEventListener('click', submitChangePassword);
+cpConfirmInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') submitChangePassword(); });
+
+function buildNav() {
+  navEl.innerHTML = '';
+  PAGES.forEach(p => {
+    const btn = document.createElement('button');
+    btn.className = 'shell-nav-btn';
+    btn.textContent = p.label;
+    btn.dataset.pageId = p.id;
+    btn.onclick = () => navigateTo(p.id);
+    navEl.appendChild(btn);
+  });
+}
+
+function setActiveNavBtn(id) {
+  navEl.querySelectorAll('.shell-nav-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.pageId === id);
+  });
+}
+
+async function navigateTo(id) {
+  const page = PAGES.find(p => p.id === id) || PAGES[0];
+  if (!page) {
+    contentEl.innerHTML = '<div class="shell-empty">No pages registered yet — add one in pages/registry.js.</div>';
+    return;
+  }
+
+  if (location.hash.replace('#', '') !== page.id) location.hash = page.id;
+  setActiveNavBtn(page.id);
+
+  if (active && active.destroy) {
+    try { active.destroy(contentEl); } catch (e) { console.warn('[shell] page destroy() failed:', e); }
+  }
+  contentEl.innerHTML = '<div class="shell-loading">Loading…</div>';
+
+  try {
+    const mod = await import(page.module);
+    contentEl.innerHTML = '';
+    await mod.render(contentEl, ctx);
+    active = { id: page.id, destroy: mod.destroy };
+  } catch (err) {
+    console.error('[shell] failed to load page', page.id, err);
+    contentEl.innerHTML = `<div class="shell-error">Could not load "${page.label}".<br>${err.message}</div>`;
+    showToast('Failed to load ' + page.label, 'error');
+  }
+}
+
+// Back/forward + manual #hash edits both work
+window.addEventListener('hashchange', () => {
+  const id = location.hash.replace('#', '');
+  if (id && id !== active?.id) navigateTo(id);
+});
+
+// If the user logs in/out inside the iframe-wrapped dashboard, or
+// switches theme, reflect it in the shell chrome immediately —
+// same-origin sessionStorage/localStorage changes fire 'storage'
+// events on the parent window even though the write happened inside
+// the iframe.
+window.addEventListener('storage', (e) => {
+  if (e.key && e.key.startsWith('drgsbc_')) renderUserBadge();
+});
+
+document.getElementById('shellBrand').addEventListener('click', () => navigateTo('updation'));
+
+buildNav();
+renderUserBadge();
+navigateTo(location.hash.replace('#', '') || (PAGES[0] && PAGES[0].id));
+</script>
+
+</body>
+</html>
