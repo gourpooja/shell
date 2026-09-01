@@ -3716,6 +3716,28 @@ function siCalcStatus(subItem, procDetail, billDetail) {
   if (ps === pdNorm('Dropped')) return 'Dropped';
   if (ps === pdNorm('On Hold')) return 'On Hold';
 
+  // Fixed: 'Work Completed' and 'Process Over' are the other two
+  // reference:'today()' manual-action stages in process_tat (same
+  // family as On Hold/Dropped above — a genuine action, not something
+  // derivable from an existing date). They were never special-cased,
+  // so picking either one silently never advanced status. Resolved
+  // dynamically from the live TAT cache rather than hardcoded, so this
+  // stays correct if process_tat's exact status text ever changes.
+  // Deliberately does NOT extend to ordinary 'log()'/'column:X' stages
+  // (e.g. Spec Finalization, Vendor/Bill details review) — those are
+  // same-tier working notes and are correctly status-invariant; only
+  // the reference:'today()' action stages get this treatment.
+  if (ps === pdNorm('Work Completed') || ps === pdNorm('Process Over')) {
+    const tatNow = _processTatCache || [];
+    // Prefer the canonical self-referential row (status text === stage
+    // text, e.g. status='Work Completed' & stage='Work Completed');
+    // fall back to any row with a matching stage (covers 'Process Over',
+    // which has no self-referential row — its status is 'Bill Passed').
+    const selfRef = tatNow.find(t => pdNorm(t.process_stage) === ps && pdNorm(t.status) === ps);
+    const anyMatch = selfRef || tatNow.find(t => pdNorm(t.process_stage) === ps);
+    if (anyMatch) return anyMatch.status;
+  }
+
   // TAT-driven: derive status from _processTatCache at runtime.
   // Change the process_tat table → status logic changes automatically.
   const tat = _processTatCache || [];
@@ -3821,13 +3843,41 @@ function pdRecalcLatestCost(sid, row) {
   if (idx >= 0) PD.allRows[idx].latest_cost = parseFloat(row.vetted_cost) || 0;
 }
 
+// Shared schedule computation — given a resolved TAT row (the row that
+// defines the CURRENT stage's own trigger/tat_days/pending_with), works
+// out pending_with, process_pdc, and next_process_due_on. Used both by
+// the live dropdown-change preview (pdRecalcFromTat) and by pdSaveAll()'s
+// forced recompute after Resume/On Hold/Dropped resolve to a real stage —
+// one formula, so the two can never drift apart.
+function pdComputeSchedule(tat, stageRow, row) {
+  const todayStr = new Date().toISOString().split('T')[0];
+  const fieldName   = stageRow.trigger_field;
+  const isLog       = (stageRow.reference === 'log()' || stageRow.reference === 'today()');
+  const baseDate    = isLog ? todayStr : (row[fieldName] || todayStr);
+  const curSeq      = parseInt(stageRow.priority, 10);
+  const pendingWith = stageRow.pending_with || '—';
+
+  let totalTat = 0;
+  tat.filter(t => parseInt(t.priority, 10) >= curSeq && parseInt(t.priority, 10) <= 20)
+     .forEach(t => totalTat += (parseFloat(t.tat_days) || 0));
+  const processPdc = baseDate ? addDays(baseDate, totalTat) : '';
+
+  const nextRow = tat.find(t => parseInt(t.priority, 10) === curSeq + 1);
+  let nextDueOn = '';
+  if (nextRow) {
+    const nextIsLog    = (nextRow.reference === 'log()' || nextRow.reference === 'today()');
+    const nextBaseDate = nextIsLog ? todayStr : (row[nextRow.trigger_field] || baseDate);
+    nextDueOn = nextBaseDate ? addDays(nextBaseDate, parseFloat(nextRow.tat_days) || 0) : '';
+  }
+  return { pendingWith, processPdc, nextDueOn };
+}
+
 async function pdRecalcFromTat(sid, stageName) {
   const tat = await pdGetTat();
   if (!tat.length) return;
 
   const row = PD.allRows.find(r => String(r.sub_item_id) === String(sid));
   if (!row) return;
-  const idx           = PD.allRows.indexOf(row);
   const currentStatus = row.status || '';
 
   // Correct TAT lookup: match by process_stage AND current status.
@@ -3838,11 +3888,22 @@ async function pdRecalcFromTat(sid, stageName) {
   const stageRow = tat.find(t => pdNorm(t.process_stage) === pdNorm(stageName) && pdNorm(t.status) === pdNorm(currentStatus));
   if (!stageRow) return;
 
-  const todayStr = new Date().toISOString().split('T')[0];
-
-  // On Hold / Dropped: update local status immediately so stage dropdown rebuilds
+  // On Hold / Dropped: rebuild the Stage dropdown immediately so Resume
+  // appears without waiting for a save round-trip.
+  // Fixed: this used to also set PD.allRows[idx].status = stageName
+  // right here, as a live-preview convenience. That was the actual bug
+  // behind "status doesn't persist to On Hold/Dropped" — it silently
+  // mutated row.status to the picked value BEFORE Save was ever clicked.
+  // By the time pdSaveAll() ran its newStatus !== row.status check, the
+  // in-memory row.status already (incorrectly) matched the picked value,
+  // so the check evaluated false and the real PATCH to sanction_sub_item
+  // was skipped entirely — leaving the database untouched while the UI
+  // looked correct, until a reload revealed the real (unwritten) DB
+  // value. row.status must stay at its last DB-CONFIRMED value until
+  // pdSaveAll() actually writes the new one — the dropdown rebuild below
+  // doesn't need the mutation anyway, since it already uses stageName
+  // directly for both the options list and the selected value.
   if (pdNorm(stageName) === 'on hold' || pdNorm(stageName) === 'dropped') {
-    if (idx >= 0) PD.allRows[idx].status = stageName;
     const rowElT = document.querySelector(`[data-sid="${sid}"]`);
     if (rowElT) {
       rowElT.querySelectorAll('select[data-field="process_stage"]').forEach(sel => {
@@ -3853,31 +3914,22 @@ async function pdRecalcFromTat(sid, stageName) {
     // Fall through: TAT row gives pending_with = HQ-SWR
   }
 
-  // Resume: siCalcStatus will recalculate correct status from dates on save
+  // Resume: never a real destination state — its own TAT row's
+  // trigger_field/tat_days/pending_with describe the "resume" action
+  // itself, not the schedule of whatever status the item resumes into.
+  // Fixed: this used to fall through into the schedule computation
+  // below using literal Resume-row data anyway, silently writing wrong
+  // pending_with/process_pdc/next_process_due_on on save (status and
+  // process_stage were already being correctly recomputed fresh by
+  // pdSaveAll — these three were the ones left stale). Stop here;
+  // pdSaveAll() computes the real schedule once it knows the true
+  // resolved stage, after Save is clicked.
   if (pdNorm(stageName) === 'resume') {
-    showToast('RESUMING — STATUS WILL BE RECALCULATED FROM DATES ON SAVE');
+    showToast('RESUMING — STATUS, STAGE & SCHEDULE WILL BE RECALCULATED FRESH ON SAVE');
+    return;
   }
 
-  const fieldName   = stageRow.trigger_field;
-  const isLog       = (stageRow.reference === 'log()' || stageRow.reference === 'today()');
-  const baseDate    = isLog ? todayStr : (row[fieldName] || todayStr);
-  const curSeq      = parseInt(stageRow.priority, 10);
-  const pendingWith = stageRow.pending_with || '—';
-
-  // process_pdc: baseDate + sum of TAT for stages priority 1..20 (terminal >20 excluded)
-  let totalTat = 0;
-  tat.filter(t => parseInt(t.priority,10) >= curSeq && parseInt(t.priority,10) <= 20)
-     .forEach(t => totalTat += (parseFloat(t.tat_days) || 0));
-  const processPdc = baseDate ? addDays(baseDate, totalTat) : '';
-
-  // next_process_due_on: next sequential priority's trigger field + its TAT
-  const nextRow = tat.find(t => parseInt(t.priority,10) === curSeq + 1);
-  let nextDueOn = '';
-  if (nextRow) {
-    const nextIsLog    = (nextRow.reference === 'log()' || nextRow.reference === 'today()');
-    const nextBaseDate = nextIsLog ? todayStr : (row[nextRow.trigger_field] || baseDate);
-    nextDueOn = nextBaseDate ? addDays(nextBaseDate, parseFloat(nextRow.tat_days) || 0) : '';
-  }
+  const { pendingWith, processPdc, nextDueOn } = pdComputeSchedule(tat, stageRow, row);
 
   // Update DOM spans immediately (live display before save)
   const rowEl = document.querySelector(`[data-sid="${sid}"]`);
@@ -3959,6 +4011,8 @@ const PD = {
   dirtyProc: {}, // sub_item_id -> { field: value } of unsaved Procurement edits
   dirtyBill: {}, // sub_item_id -> { field: value } of unsaved Billing edits
   sharedScrollTop: 0, // vertical scroll position, carried over between Procurement <-> Billing
+  sortField: null, // Procurement grid column sort — e.g. 'indent_number', 'loa_po_number'
+  sortAsc: true,
 };
 
 const PD_FILTER_MAP = {
@@ -4088,6 +4142,55 @@ async function pdSubItemAutoFill(inputVal) {
   } catch (e) {}
 }
 
+// Reads a row's current display value for a field, preferring any
+// unsaved edit staged in PD.dirtyProc over the last-saved DB value —
+// so sorting reflects what's actually on screen, not stale data.
+function pdLiveVal(row, field) {
+  const dirty = PD.dirtyProc[row.sub_item_id];
+  if (dirty && dirty[field] !== undefined && dirty[field] !== null) return dirty[field];
+  return row[field] || '';
+}
+
+// Sorts PD.filteredRows in place per the currently active PD.sortField/
+// sortAsc, without toggling or re-rendering — used both when a header
+// is clicked and to re-apply an already-active sort after the filter
+// set changes (FETCH SUB-ITEMS / filter dropdowns), so sort order
+// persists the way most people expect a spreadsheet-style sort to.
+function pdApplySortToFilteredRows() {
+  if (!PD.sortField) return;
+  const field = PD.sortField;
+  PD.filteredRows.sort((a, b) => {
+    const av = String(pdLiveVal(a, field)).trim();
+    const bv = String(pdLiveVal(b, field)).trim();
+    // Blanks always sink to the bottom regardless of direction, so an
+    // empty Indent/LOA-PO column doesn't dominate the top of the list.
+    if (!av && !bv) return 0;
+    if (!av) return 1;
+    if (!bv) return -1;
+    const cmp = av.localeCompare(bv, undefined, { numeric: true, sensitivity: 'base' });
+    return PD.sortAsc ? cmp : -cmp;
+  });
+}
+
+// Click handler for sortable Procurement grid headers (Indent/Demand No,
+// LOA/PO No — brought back after being lost in the recovery; wired
+// generically so any other <th data-sort-field="..."> can opt in the
+// same way). Clicking the same column again flips direction; clicking a
+// different column starts fresh at ascending.
+function pdSortProcBy(field) {
+  if (PD.sortField === field) PD.sortAsc = !PD.sortAsc;
+  else { PD.sortField = field; PD.sortAsc = true; }
+  pdApplySortToFilteredRows();
+  pdRenderProcTable();
+  document.querySelectorAll('.pd-sort-arrow').forEach(el => {
+    el.textContent = (PD.sortField === el.dataset.sortArrow) ? (PD.sortAsc ? ' ▲' : ' ▼') : '';
+  });
+}
+document.querySelectorAll('#pd_proc_table th[data-sort-field]').forEach(th => {
+  th.style.cursor = 'pointer';
+  th.addEventListener('click', () => pdSortProcBy(th.dataset.sortField));
+});
+
 function pdApplyFilters() {
   const ph  = document.getElementById('pd_f_planhead').value;
   const dep = document.getElementById('pd_f_depot').value;
@@ -4116,6 +4219,7 @@ function pdApplyFilters() {
     if (pw  !== 'ALL' && r.pending_with      !== pw)  return false;
     return true;
   });
+  pdApplySortToFilteredRows(); // re-apply an already-active sort after the filter set changes
 
   document.getElementById('pd_row_count').textContent = PD.filteredRows.length;
   if (PD.activeSubTab === 'summary_sub') { pdRenderSummary(); pdRenderSummaryExtras(); }
@@ -5010,12 +5114,37 @@ async function pdSaveAll() {
           if (newStatus && (statusChanged || wasResume)) {
             const tat = _processTatCache || [];
             const autoStageRow = tat.filter(t => pdNorm(t.status) === pdNorm(newStatus)).sort((a, b) => (a.priority || 0) - (b.priority || 0))[0];
-            if (autoStageRow?.process_stage && pdNorm(autoStageRow.process_stage) !== pdNorm(row.process_stage)) {
+            if (autoStageRow?.process_stage) {
               const autoStage = autoStageRow.process_stage;
-              await nxFetch(`process_detail?sub_item_id=eq.${subItemId}`,
-                { method: 'PATCH', body: { process_stage: autoStage, updated_at: new Date().toISOString() }, prefer: 'return=representation' });
+              // Fixed: whenever we're already inside this block (status
+              // genuinely changed, or Resume forced a full recompute), the
+              // schedule fields must be recomputed from THIS resolved
+              // stage's own TAT row too — not left as whatever the primary
+              // dirty-field loop already wrote earlier in this save. For
+              // Resume specifically, pdRecalcFromTat() no longer marks
+              // these dirty at all (its own TAT row is meaningless as a
+              // schedule source), so without this they'd be silently
+              // skipped entirely. Written unconditionally here (not gated
+              // on whether the stage TEXT happens to differ from before)
+              // so a rare coincidental stage-name match across two
+              // different statuses still gets its schedule refreshed.
+              const sched = pdComputeSchedule(tat, autoStageRow, row);
+              await nxFetch(`process_detail?sub_item_id=eq.${subItemId}`, {
+                method: 'PATCH',
+                body: {
+                  process_stage: autoStage,
+                  pending_with: sched.pendingWith,
+                  process_pdc: sched.processPdc || null,
+                  next_process_due_on: sched.nextDueOn || null,
+                  updated_at: new Date().toISOString(),
+                },
+                prefer: 'return=representation',
+              });
               row.process_stage = autoStage;
-            } else if (wasResume && !autoStageRow?.process_stage) {
+              row.pending_with = sched.pendingWith;
+              row.process_pdc = sched.processPdc;
+              row.next_process_due_on = sched.nextDueOn;
+            } else if (wasResume) {
               console.warn('[DRGSBC] Resume could not resolve to a stage — no process_tat row found for status:', newStatus, 'sub_item_id:', subItemId);
             }
           }
