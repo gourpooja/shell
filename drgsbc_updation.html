@@ -134,6 +134,9 @@ thead .pd-th{background-color:var(--bg-panel);background-image:linear-gradient(v
 /* ── My Space ── */
 .ms-stat-card{background:var(--bg-card);border:1px solid var(--border);padding:14px;text-align:center;cursor:pointer;transition:border-color 0.2s;}
 .pd-th{font-family:'Share Tech Mono',monospace;font-size:8px;letter-spacing:1px;color:var(--accent-blue);padding:9px 8px;text-align:left;white-space:nowrap;font-weight:400;}
+.pd-th.pd-sortable{cursor:pointer;user-select:none;transition:color .15s;}
+.pd-th.pd-sortable:hover{color:var(--accent-cyan);}
+.pd-sort-arrow{color:var(--accent-cyan);font-size:8px;}
 /* Frozen (sticky-left) columns — Sub-Item Name/Qty/Latest Cost are
    always frozen; Remarks/Stage/Unit Price/Consignee Depot/Next
    Process Due On/Owner-SSE/Process PDC freeze automatically whenever
@@ -744,12 +747,12 @@ if (window.self !== window.top) document.documentElement.classList.add('embedded
                     <th class="pd-th pd-col" data-col="ownersse">OWNER / SSE</th>
                     <th class="pd-th pd-col" data-col="processpdc">PROCESS PDC</th>
                     <th class="pd-th" data-col="pendingwith">PENDING WITH</th>
-                    <th class="pd-th pd-edit-h pd-grp" data-grp="indent" data-col="indentno">INDENT/DEMAND NO</th>
+                    <th class="pd-th pd-edit-h pd-grp pd-sortable" data-grp="indent" data-col="indentno" data-sort-field="indent_number" title="Click to sort">INDENT/DEMAND NO<span class="pd-sort-arrow" data-sort-arrow="indent_number"></span></th>
                     <th class="pd-th pd-edit-h pd-grp" data-grp="indent" data-col="indentdate">INDENT DATE</th>
                     <th class="pd-th pd-edit-h pd-grp" data-grp="indent" data-col="tendercalledon">TENDER CALLED ON</th>
                     <th class="pd-th pd-edit-h pd-grp" data-grp="indent" data-col="tenderopenedon">TENDER OPENED ON</th>
                     <th class="pd-th pd-edit-h pd-grp" data-grp="loapo" data-col="vendorname">VENDOR NAME</th>
-                    <th class="pd-th pd-edit-h pd-grp" data-grp="loapo" data-col="loaponumber">LOA/PO NO</th>
+                    <th class="pd-th pd-edit-h pd-grp pd-sortable" data-grp="loapo" data-col="loaponumber" data-sort-field="loa_po_number" title="Click to sort">LOA/PO NO<span class="pd-sort-arrow" data-sort-arrow="loa_po_number"></span></th>
                     <th class="pd-th pd-edit-h pd-grp" data-grp="loapo" data-col="loapodate">LOA/PO DATE</th>
                     <th class="pd-th pd-edit-h pd-grp" data-grp="inward" data-col="deliverydate">DELIVERY DATE</th>
                     <th class="pd-th pd-edit-h pd-grp" data-grp="inward" data-col="commissioningdate">COMMISSIONING DATE</th>
