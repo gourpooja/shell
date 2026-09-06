@@ -3603,7 +3603,7 @@ async function clOnTabOpen() {
    same key v16 uses, so a preference set here would carry over if
    the same browser later opens v16 directly (and vice versa).
    ================================================================ */
-const PD_TOGGLE_COLS = ['remarks', 'stage', 'unitprice', 'depot', 'nextdue', 'ownersse', 'processpdc'];
+const PD_TOGGLE_COLS = ['remarks', 'stage', 'unitprice', 'depot', 'nextdue', 'ownersse', 'processpdc', 'manualpdc'];
 const PD_TOGGLE_GROUPS = {
   indent: ['indentno', 'indentdate', 'tendercalledon', 'tenderopenedon'],
   loapo:  ['vendorname', 'loaponumber', 'loapodate'],
@@ -4355,7 +4355,7 @@ async function pdFetchData() {
           'line_item_id,item_name,item_description,unit,department,' +
           'sanction_header!inner(sanction_id,under_power,plan_head,allocation_type,sanction_year,sanctioned_on)' +
         '),' +
-        'process_detail(process_id,process_stage,process_pdc,next_process_due_on,pending_with,owner_sse,vendor_name,' +
+        'process_detail(process_id,process_stage,process_pdc,manual_pdc,next_process_due_on,pending_with,owner_sse,vendor_name,' +
           'indent_number,indent_date,tender_called_on,tender_opened_on,loa_po_number,loa_po_date,' +
           'delivery_due_on,delivery_date,crn_number,crn_date,' +
           'commissioning_date,ptc_date,total_bills,remarks),' +
@@ -4435,6 +4435,7 @@ async function pdFetchData() {
         ptc_date:               p.ptc_date || '',
         total_bills:          p.total_bills || 0,
         process_pdc:          p.process_pdc || '',
+        manual_pdc:           p.manual_pdc || '',
         owner_sse:            p.owner_sse || '',
         vendor_name:          p.vendor_name || '',
         bill_id:          bd.bill_id || null,
@@ -4748,6 +4749,23 @@ function pdIsBillReleased(b) { return !pdIsBillRejected(b) && !!(b.co7_number &&
 // "Final" if released AND its description contains "final" (case-insensitive).
 function pdIsBillFinal(b) { return pdIsBillReleased(b) && !!(b.bill_description && /final/i.test(b.bill_description)); }
 
+// Manual PDC — displayed default is process_pdc or the final bill's
+// payment_date, whichever is EARLIER. Genuinely stored manual_pdc
+// (once a person actually overrides it) always takes priority — these
+// two helpers are only ever consulted when process_detail.manual_pdc
+// is still null, i.e. nobody has overridden it yet.
+function pdFindFinalBillPaymentDate(subItemId) {
+  const bills = PD.existBill[subItemId] || [];
+  const finalBill = bills.find(b => pdIsBillFinal(b));
+  return finalBill?.payment_date || '';
+}
+function pdComputeManualPdcDefault(row) {
+  const processPdc = row.process_pdc || '';
+  const finalPay = pdFindFinalBillPaymentDate(row.sub_item_id);
+  if (processPdc && finalPay) return (processPdc < finalPay) ? processPdc : finalPay;
+  return processPdc || finalPay || '';
+}
+
 function pdFormatDateDMY(isoDate) {
   if (!isoDate) return '—';
   const parts = String(isoDate).split('-');
@@ -4819,6 +4837,9 @@ function pdRenderProcTable() {
       <td class="pd-ro muted pd-col pd-frozen" data-col="ownersse">${r.owner_sse || '—'}</td>
       <td class="pd-cell pd-col pd-frozen" data-col="processpdc" title="Auto-calculated: field date + remaining TAT"><span class="pd-ro ms-pdc-calc ${pdDateClass(r.process_pdc)}" style="color:var(--accent-cyan);font-family:'Share Tech Mono',monospace;font-size:9px;">${r.process_pdc || '—'}</span></td>
       <td class="pd-cell" data-col="pendingwith"><span class="pd-ro ms-pw-calc" style="color:var(--accent-gold);font-family:'Share Tech Mono',monospace;font-size:9px;">${r.pending_with || '—'}</span></td>
+      <td class="pd-cell edit pd-col" data-col="manualpdc" title="Defaults to Process PDC or the final bill's payment date, whichever is earlier — override with any date if needed">
+        <input class="pd-inp${dc('manual_pdc')}" type="date" data-sid="${sid}" data-field="manual_pdc" value="${dirty.manual_pdc !== undefined ? dirty.manual_pdc : (r.manual_pdc || pdComputeManualPdcDefault(r))}">
+      </td>
       <td class="pd-cell edit pd-grp" data-grp="indent" data-col="indentno">
         <div class="pd-loapo-wrap">
           <input class="pd-inp${dc('indent_number')}" type="text" data-sid="${sid}" data-field="indent_number" value="${v('indent_number')}" placeholder="—">
