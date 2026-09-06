@@ -3284,6 +3284,27 @@ document.getElementById('cl_subject').addEventListener('input', (e) => {
   document.getElementById('cl_subject_count').textContent = '(' + e.target.value.length + '/50)';
 });
 
+// Chronolog's upload/download endpoint lives on the NAS itself, reached
+// two different ways depending on how the Shell is currently being
+// accessed:
+//   - Via the Cloudflare Worker (shell-dashboard.drgsbc.workers.dev,
+//     or any *.workers.dev host) — HTTPS, reachable from anywhere.
+//     Talking to the NAS directly over plain http:// from this origin
+//     would be blocked outright by the browser's mixed-content policy,
+//     so this MUST go through the matching HTTPS Tunnel-published route
+//     instead (chronolog.drgsbc.workers.dev), same mechanism as the
+//     Shell's own dashboard/api routes.
+//   - Via the NAS's own direct LAN IP (e.g. http://10.205.50.15:xxxx) —
+//     plain HTTP, LAN-only, no mixed-content concern — talk to the NAS
+//     Chronolog port directly, no Cloudflare hop needed.
+// Update the two literals below if either hostname ever changes.
+function clBaseUrl() {
+  if (location.hostname.endsWith('.workers.dev')) {
+    return 'https://chronolog.drgsbc.workers.dev';
+  }
+  return 'http://10.205.50.15:8088';
+}
+
 async function clRecordEvent() {
   const statusEl = document.getElementById('cl_entry_status');
   const path = CL.getPath();
@@ -3313,7 +3334,7 @@ async function clRecordEvent() {
       const formData = new FormData();
       formData.append('file', fileInput.files[0]);
       formData.append('path', path);
-      const uploadResp = await fetch('http://10.205.50.15:8088/chronolog-upload.php', { method: 'POST', body: formData });
+      const uploadResp = await fetch(`${clBaseUrl()}/chronolog-upload.php`, { method: 'POST', body: formData });
       const uploadResult = await uploadResp.json();
       if (!uploadResult.success) throw new Error(uploadResult.error || 'Upload failed');
       filePath = uploadResult.file_path;
@@ -3517,7 +3538,7 @@ async function clDeleteEvent(chronoId) {
 
 function clDownloadFile(filePath, fileName) {
   const a = document.createElement('a');
-  a.href = 'http://10.205.50.15:8088/' + filePath;
+  a.href = `${clBaseUrl()}/` + filePath;
   a.download = fileName;
   a.target = '_blank';
   document.body.appendChild(a);
@@ -4983,7 +5004,12 @@ async function pdSaveAll() {
           await nxFetch(`process_detail?process_id=eq.${existing.process_id}`,
             { method: 'PATCH', body: { ...changes, updated_at: new Date().toISOString() }, prefer: 'return=representation' });
         } else {
-          const row = PD.allRows.find(r => r.sub_item_id === subItemId);
+          // Fixed: subItemId (an Object.keys() key) is always a string;
+          // r.sub_item_id (from the API) is a number. Strict === between
+          // them was always false, so this lookup silently never found
+          // the row — every reference below it (row?.owner_sse, etc.)
+          // was reading from `undefined`.
+          const row = PD.allRows.find(r => String(r.sub_item_id) === String(subItemId));
           const today = new Date().toISOString().slice(0, 10);
           const payload = {
             sub_item_id: subItemId,
@@ -4999,10 +5025,19 @@ async function pdSaveAll() {
           const created = await nxFetch('process_detail', { method: 'POST', body: payload, prefer: 'return=representation' });
           const createdRow = Array.isArray(created) ? created[0] : created;
           PD.existProc[subItemId] = createdRow;
-          const idx0 = PD.allRows.findIndex(r => r.sub_item_id === subItemId);
+          const idx0 = PD.allRows.findIndex(r => String(r.sub_item_id) === String(subItemId));
           if (idx0 >= 0) { Object.assign(PD.allRows[idx0], changes); PD.allRows[idx0].process_id = createdRow.process_id; }
         }
-        const idx = PD.allRows.findIndex(r => r.sub_item_id === subItemId);
+        // Fixed: THE core bug behind "status never updates after a Stage
+        // change" — this lookup used unstringified strict equality
+        // (number !== string, always false), so it silently never found
+        // the row, meaning the just-written process_stage (and every
+        // other dirty field) was never synced into PD.allRows. The DB
+        // write itself succeeded — only this in-memory cache-sync step
+        // failed — so the very next block (status recalculation) read
+        // row.process_stage as whatever it was BEFORE this edit, never
+        // detecting that anything needed to change.
+        const idx = PD.allRows.findIndex(r => String(r.sub_item_id) === String(subItemId));
         if (idx >= 0) Object.assign(PD.allRows[idx], changes);
         Object.keys(changes).forEach(f => {
           const el = document.querySelector(`[data-field='${f}'][data-sid='${subItemId}']`);
@@ -5036,7 +5071,11 @@ async function pdSaveAll() {
           const createdBillRow = Array.isArray(createdBill) ? createdBill[0] : createdBill;
           PD.existBill[subItemId] = [createdBillRow];
         }
-        const idx = PD.allRows.findIndex(r => r.sub_item_id === subItemId);
+        // Fixed: same type-mismatched equality bug as the Procurement
+        // loop above (subItemId is a string key, r.sub_item_id is a
+        // number) — this cache-sync silently never ran, so Billing
+        // fields never made it into PD.allRows after a successful save.
+        const idx = PD.allRows.findIndex(r => String(r.sub_item_id) === String(subItemId));
         if (idx >= 0) Object.assign(PD.allRows[idx], changes);
         Object.keys(changes).forEach(f => {
           const el = document.querySelector(`[data-field='${f}'][data-sid='${subItemId}']`);
