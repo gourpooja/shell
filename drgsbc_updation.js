@@ -3268,6 +3268,30 @@ function clToggleAttachment() {
 }
 document.getElementById('cl_has_attachment').addEventListener('change', clToggleAttachment);
 
+// Disables the "Has Attachment" checkbox and shows an inline explanation
+// whenever this session genuinely can't reach the NAS for file transfer
+// (see clAttachmentsAvailable() note above clBaseUrl()). Injected via JS
+// rather than a static HTML edit, and only once — safe to call repeatedly
+// on every Chronolog tab open.
+function clApplyAttachmentAvailability() {
+  const cb = document.getElementById('cl_has_attachment');
+  if (!cb) return;
+  const available = clAttachmentsAvailable();
+  cb.disabled = !available;
+  if (!available) cb.checked = false;
+
+  let note = document.getElementById('cl_attachment_unavailable_note');
+  if (!available && !note) {
+    note = document.createElement('div');
+    note.id = 'cl_attachment_unavailable_note';
+    note.style.cssText = 'font-family:"Share Tech Mono",monospace;font-size:9px;color:var(--text-muted);margin-top:4px;';
+    note.textContent = '⚠ Attachments unavailable this session — open the Shell via the NAS\'s direct address to attach or download files.';
+    cb.closest('.form-group')?.appendChild(note);
+  } else if (available && note) {
+    note.remove();
+  }
+}
+
 function clValidateFile(input) {
   const file = input.files[0];
   if (!file) return;
@@ -3292,16 +3316,24 @@ document.getElementById('cl_subject').addEventListener('input', (e) => {
 //     Talking to the NAS directly over plain http:// from this origin
 //     would be blocked outright by the browser's mixed-content policy,
 //     so this MUST go through the matching HTTPS Tunnel-published route
-//     instead (chronolog.drgsbc.workers.dev), same mechanism as the
-//     Shell's own dashboard/api routes.
-//   - Via the NAS's own direct LAN IP (e.g. http://10.205.50.15:xxxx) —
-//     plain HTTP, LAN-only, no mixed-content concern — talk to the NAS
-//     Chronolog port directly, no Cloudflare hop needed.
-// Update the two literals below if either hostname ever changes.
+// Chronolog file attachments (upload + download) can only reach the NAS
+// when the Shell itself was loaded directly from the NAS's own address
+// (plain http://10.205.50.15:xxxx). When the Shell is loaded from the
+// Cloudflare Worker (any *.workers.dev host, HTTPS), the browser's
+// mixed-content policy blocks any http:// request to the NAS outright —
+// this is NOT about physical network location, it's about which URL
+// opened the Shell this session. There is currently no working HTTPS
+// route to the NAS's Chronolog endpoint (attempted via a Tunnel-
+// published-as-Worker route; confirmed non-functional), so rather than
+// let uploads/downloads silently fail, the UI disables them outright
+// with a clear explanation whenever attachments genuinely can't work
+// this session. Everything else in Chronolog (viewing history, and
+// recording note-only events with no attachment) is unaffected either
+// way, since those only ever talk to Supabase.
+function clAttachmentsAvailable() {
+  return !location.hostname.endsWith('.workers.dev');
+}
 function clBaseUrl() {
-  if (location.hostname.endsWith('.workers.dev')) {
-    return 'https://chronolog.drgsbc.workers.dev';
-  }
   return 'http://10.205.50.15:8088';
 }
 
@@ -3319,6 +3351,10 @@ async function clRecordEvent() {
   if (!subject) { showToast('SUBJECT IS REQUIRED', 'error'); return; }
   if (hasFile && (!fileInput.files || !fileInput.files[0])) {
     showToast('PLEASE SELECT A FILE OR UNCHECK ATTACHMENT', 'error'); return;
+  }
+  if (hasFile && !clAttachmentsAvailable()) {
+    showToast('ATTACHMENTS NEED THE NAS DIRECT ADDRESS — SEE NOTE BELOW THE CHECKBOX', 'error');
+    return;
   }
 
   statusEl.style.color = 'var(--text-muted)';
@@ -3497,11 +3533,17 @@ async function clLoadHistory() {
         </div>
 
         <div style="display:flex;gap:6px;flex-shrink:0;">
-          ${ev.file_path ? `<button data-cl-action="download" data-file-path="${ev.file_path}" data-file-name="${ev.file_name || 'file'}"
-            style="background:transparent;border:1px solid var(--accent-warn);color:var(--accent-warn);
-            padding:4px 8px;border-radius:4px;cursor:pointer;font-family:'Share Tech Mono',monospace;font-size:9px;">
-            ↓ FILE
-          </button>` : ''}
+          ${ev.file_path ? (clAttachmentsAvailable()
+            ? `<button data-cl-action="download" data-file-path="${ev.file_path}" data-file-name="${ev.file_name || 'file'}"
+                style="background:transparent;border:1px solid var(--accent-warn);color:var(--accent-warn);
+                padding:4px 8px;border-radius:4px;cursor:pointer;font-family:'Share Tech Mono',monospace;font-size:9px;">
+                ↓ FILE
+              </button>`
+            : `<button disabled title="Open the Shell via the NAS's direct address to download attachments"
+                style="background:transparent;border:1px solid var(--text-muted);color:var(--text-muted);
+                padding:4px 8px;border-radius:4px;cursor:not-allowed;font-family:'Share Tech Mono',monospace;font-size:9px;">
+                ↓ FILE (LAN ONLY)
+              </button>`) : ''}
           ${canEdit ? `<button data-cl-action="delete" data-chrono-id="${ev.chrono_id}"
             style="background:transparent;border:1px solid var(--accent-red);color:var(--accent-red);
             padding:4px 8px;border-radius:4px;cursor:pointer;font-family:'Share Tech Mono',monospace;font-size:9px;">
@@ -3553,6 +3595,7 @@ async function clOnTabOpen() {
   const hasFileCb = document.getElementById('cl_has_attachment');
   if (hasFileCb) hasFileCb.checked = false;
   clToggleAttachment();
+  clApplyAttachmentAvailability();
 }
 
 /* ================================================================
