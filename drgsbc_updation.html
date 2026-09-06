@@ -169,6 +169,7 @@ th[data-col="nextdue"],td[data-col="nextdue"]{width:100px;min-width:100px;max-wi
 th[data-col="ownersse"],td[data-col="ownersse"]{width:95px;min-width:95px;max-width:95px;}
 th[data-col="processpdc"],td[data-col="processpdc"]{width:100px;min-width:100px;max-width:100px;}
 th[data-col="pendingwith"],td[data-col="pendingwith"]{width:110px;min-width:110px;max-width:110px;}
+th[data-col="manualpdc"],td[data-col="manualpdc"]{width:120px;min-width:120px;max-width:120px;}
 th[data-col="loaponumber"],td[data-col="loaponumber"]{width:150px;min-width:150px;}
 th[data-col="indentno"],td[data-col="indentno"]{width:190px;min-width:190px;}
 .table-panel{background:var(--bg-panel);border:1px solid var(--border);}
@@ -689,6 +690,7 @@ if (window.self !== window.top) document.documentElement.classList.add('embedded
                     <label class="pd-col-toggle"><input type="checkbox" data-col="nextdue"> Next Process Due On</label>
                     <label class="pd-col-toggle"><input type="checkbox" data-col="ownersse"> Owner / SSE</label>
                     <label class="pd-col-toggle"><input type="checkbox" data-col="processpdc"> Process PDC</label>
+					<label class="pd-col-toggle"><input type="checkbox" data-col="manualpdc"> Manual PDC</label>
                     <div id="pd_col_group_pills">
                       <div style="border-top:1px solid var(--border);margin:3px 0 9px;"></div>
                       <div style="display:flex;flex-direction:column;gap:9px;">
@@ -746,8 +748,9 @@ if (window.self !== window.top) document.documentElement.classList.add('embedded
                     <th class="pd-th pd-col" data-col="nextdue">NEXT DUE ON</th>
                     <th class="pd-th pd-col" data-col="ownersse">OWNER / SSE</th>
                     <th class="pd-th pd-col" data-col="processpdc">PROCESS PDC</th>
-                    <th class="pd-th" data-col="pendingwith">PENDING WITH</th>
-                    <th class="pd-th pd-edit-h pd-grp pd-sortable" data-grp="indent" data-col="indentno" data-sort-field="indent_number" title="Click to sort">INDENT/DEMAND NO<span class="pd-sort-arrow" data-sort-arrow="indent_number"></span></th>
+					<th class="pd-th" data-col="pendingwith">PENDING WITH</th>
+					<th class="pd-th pd-edit-h pd-col" data-col="manualpdc" title="Defaults to Process PDC or the final bill's payment date, whichever is earlier">MANUAL PDC</th>
+					<th class="pd-th pd-edit-h pd-grp" data-grp="indent" data-col="indentno">INDENT/DEMAND NO</th>
                     <th class="pd-th pd-edit-h pd-grp" data-grp="indent" data-col="indentdate">INDENT DATE</th>
                     <th class="pd-th pd-edit-h pd-grp" data-grp="indent" data-col="tendercalledon">TENDER CALLED ON</th>
                     <th class="pd-th pd-edit-h pd-grp" data-grp="indent" data-col="tenderopenedon">TENDER OPENED ON</th>
