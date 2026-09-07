@@ -35,7 +35,16 @@ export async function pgFetch(path, options = {}) {
     const body = await res.text().catch(() => '');
     throw new Error(`PostgREST ${res.status}: ${body}`);
   }
-  return res.status === 204 ? null : res.json();
+  // Fixed: same empty-body-on-POST fix as nxFetch below — see that
+  // function's comment for the full explanation.
+  if (res.status === 204) return null;
+  const rawText = await res.text();
+  if (!rawText) return null;
+  try {
+    return JSON.parse(rawText);
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -157,7 +166,24 @@ export async function nxFetch(path, options = {}) {
     throw new Error(`Nexus ${res.status}: ${errMsg}`);
   }
   auditRecord(method, cleanPath, body, 'OK', '').catch(() => {});
-  return res.status === 204 ? null : res.json();
+
+  // Fixed: don't assume "empty body" only ever means status 204.
+  // PostgREST's Prefer: return=minimal returns 204 for PATCH/DELETE,
+  // but 201 Created with an EMPTY body for POST — calling res.json()
+  // on that empty body threw "Unexpected end of JSON input" every time
+  // a new record (e.g. a bill via pdSaveNewBill) was inserted. The
+  // write itself always succeeded — this was purely a client-side
+  // parsing crash on the success response, but it looked like a real
+  // error to the person saving, risking accidental resubmission. Read
+  // as text first and only parse if there's actually something there.
+  if (res.status === 204) return null;
+  const rawText = await res.text();
+  if (!rawText) return null;
+  try {
+    return JSON.parse(rawText);
+  } catch {
+    return null;
+  }
 }
 
 
