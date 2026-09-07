@@ -5760,9 +5760,14 @@ function pdRenderSummary() {
   const total = rows.length;
   const today = new Date().toISOString().split('T')[0];
 
-  const active  = rows.filter(r => r.status !== 'Dropped' && r.status !== 'On Hold').length;
-  const onHold  = rows.filter(r => r.status === 'On Hold').length;
-  const dropped = rows.filter(r => r.status === 'Dropped').length;
+  // Fixed: normalized (trim + case-insensitive) — same pdNorm()
+  // treatment already applied to every other status comparison in this
+  // file. Recovered/manually-entered status text with stray casing or
+  // whitespace previously miscounted here (e.g. an item genuinely on
+  // hold could be silently counted as "active").
+  const active  = rows.filter(r => pdNorm(r.status) !== 'dropped' && pdNorm(r.status) !== 'on hold').length;
+  const onHold  = rows.filter(r => pdNorm(r.status) === 'on hold').length;
+  const dropped = rows.filter(r => pdNorm(r.status) === 'dropped').length;
   const overdue = rows.filter(r => r.next_process_due_on && r.next_process_due_on < today).length;
 
   const bannerEl = document.getElementById('summ_banner');
@@ -5811,10 +5816,29 @@ function pdRenderSummary() {
     'CRN Generated': '#06b6d4', 'Bill Submitted': '#3b82f6', 'Bill Passed': '#22c55e',
     'On Hold': '#ef4444', 'Dropped': '#6b7280', 'Process Over': '#14b8a6', 'Work Completed': '#84cc16',
   };
-  const statusCounts = {};
-  rows.forEach(r => { const s = r.status || 'Unknown'; statusCounts[s] = (statusCounts[s] || 0) + 1; });
-  const statusSegs = Object.entries(statusCounts).sort((a, b) => b[1] - a[1])
-    .map(([s, c]) => ({ label: s, count: c, color: STATUS_COLORS[s] || 'var(--text-muted)' }));
+  // Fixed: grouping/color lookup below used to key off the raw status
+  // text verbatim — a status stored with different casing/whitespace
+  // than the dictionary above (recovered/manually-entered data) fell
+  // through to the grey "unknown" bucket AND, worse, appeared as its
+  // own separate near-duplicate bar segment instead of merging with
+  // the real one. pdGroupByNormalized() below groups by the pdNorm()
+  // key but displays/colors using the color map's own canonical
+  // spelling whenever a normalized match is found.
+  function pdGroupByNormalized(rows, getField, colorMap, fallbackLabel) {
+    const normToCanonical = {};
+    Object.keys(colorMap).forEach(k => { normToCanonical[pdNorm(k)] = k; });
+    const counts = {};
+    rows.forEach(r => {
+      const raw = (getField(r) || '').toString().trim() || fallbackLabel;
+      const norm = pdNorm(raw);
+      const canonical = normToCanonical[norm] || raw;
+      counts[canonical] = (counts[canonical] || 0) + 1;
+    });
+    return Object.entries(counts).sort((a, b) => b[1] - a[1])
+      .map(([label, count]) => ({ label, count, color: colorMap[label] || 'var(--text-muted)' }));
+  }
+
+  const statusSegs = pdGroupByNormalized(rows, r => r.status, STATUS_COLORS, 'Unknown');
   renderBar('summ_status_bar', 'summ_status_legend', statusSegs);
 
   const PW_COLORS = {
@@ -5822,16 +5846,15 @@ function pdRenderSummary() {
     'Div-Finance': 'var(--accent-green)', 'Div-Planning': '#8b5cf6',
     'HQ-SWR': 'var(--accent-gold)', 'Vendor': '#f97316', 'Holdings': '#14b8a6',
   };
-  const pwCounts = {};
-  rows.forEach(r => { const pw = r.pending_with || 'Not Set'; pwCounts[pw] = (pwCounts[pw] || 0) + 1; });
-  const pwSegs = Object.entries(pwCounts).sort((a, b) => b[1] - a[1])
-    .map(([pw, c]) => ({ label: pw, count: c, color: PW_COLORS[pw] || 'var(--text-muted)' }));
+  const pwSegs = pdGroupByNormalized(rows, r => r.pending_with, PW_COLORS, 'Not Set');
   renderBar('summ_pending_bar', 'summ_pending_legend', pwSegs);
 
   const totalVetted    = rows.reduce((s, r) => s + (parseFloat(r.vetted_cost) || 0), 0);
-  const billsPassed    = rows.filter(r => ['Bill Passed', 'Process Over', 'Work Completed'].includes(r.status))
+  // Fixed: normalized, same reasoning as the badge/bar grouping above.
+  const BILLS_PASSED_STATUSES = new Set(['bill passed', 'process over', 'work completed']);
+  const billsPassed    = rows.filter(r => BILLS_PASSED_STATUSES.has(pdNorm(r.status)))
                               .reduce((s, r) => s + (parseFloat(r.total_bills) || 0), 0);
-  const billsSubmitted = rows.filter(r => r.status === 'Bill Submitted')
+  const billsSubmitted = rows.filter(r => pdNorm(r.status) === 'bill submitted')
                               .reduce((s, r) => s + (parseFloat(r.total_bills) || 0), 0);
   const yetToReceive   = Math.max(0, totalVetted - billsPassed - billsSubmitted);
   const fmt = v => v >= 10000000 ? `Rs.${(v / 10000000).toFixed(2)}Cr` : v >= 100000 ? `Rs.${(v / 100000).toFixed(2)}L` : `Rs.${Math.round(v).toLocaleString('en-IN')}`;

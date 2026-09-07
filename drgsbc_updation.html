@@ -750,13 +750,13 @@ if (window.self !== window.top) document.documentElement.classList.add('embedded
                     <th class="pd-th pd-col" data-col="processpdc">PROCESS PDC</th>
 					<th class="pd-th" data-col="pendingwith">PENDING WITH</th>
 					<th class="pd-th pd-edit-h pd-col" data-col="manualpdc" title="Defaults to Process PDC or the final bill's payment date, whichever is earlier">MANUAL PDC</th>
-					<th class="pd-th pd-edit-h pd-grp" data-grp="indent" data-col="indentno">INDENT/DEMAND NO</th>
-                    <th class="pd-th pd-edit-h pd-grp" data-grp="indent" data-col="indentdate">INDENT DATE</th>
+					<th class="pd-th pd-edit-h pd-grp pd-sortable" data-grp="indent" data-col="indentno" data-sort-field="indent_number" title="Click to sort">INDENT/DEMAND NO<span class="pd-sort-arrow" data-sort-arrow="indent_number"></span></th>
+                    <th class="pd-th pd-edit-h pd-grp pd-sortable" data-grp="indent" data-col="indentdate" data-sort-field="indent_date" title="Click to sort">INDENT DATE<span class="pd-sort-arrow" data-sort-arrow="indent_date"></span></th>
                     <th class="pd-th pd-edit-h pd-grp" data-grp="indent" data-col="tendercalledon">TENDER CALLED ON</th>
                     <th class="pd-th pd-edit-h pd-grp" data-grp="indent" data-col="tenderopenedon">TENDER OPENED ON</th>
                     <th class="pd-th pd-edit-h pd-grp" data-grp="loapo" data-col="vendorname">VENDOR NAME</th>
                     <th class="pd-th pd-edit-h pd-grp pd-sortable" data-grp="loapo" data-col="loaponumber" data-sort-field="loa_po_number" title="Click to sort">LOA/PO NO<span class="pd-sort-arrow" data-sort-arrow="loa_po_number"></span></th>
-                    <th class="pd-th pd-edit-h pd-grp" data-grp="loapo" data-col="loapodate">LOA/PO DATE</th>
+                    <th class="pd-th pd-edit-h pd-grp pd-sortable" data-grp="loapo" data-col="loapodate" data-sort-field="loa_po_date" title="Click to sort">LOA/PO DATE<span class="pd-sort-arrow" data-sort-arrow="loa_po_date"></span></th>
                     <th class="pd-th pd-edit-h pd-grp" data-grp="inward" data-col="deliverydate">DELIVERY DATE</th>
                     <th class="pd-th pd-edit-h pd-grp" data-grp="inward" data-col="commissioningdate">COMMISSIONING DATE</th>
                     <th class="pd-th pd-edit-h pd-grp" data-grp="inward" data-col="ptcdate">PTC DATE</th>
