@@ -3603,12 +3603,23 @@ async function clOnTabOpen() {
    same key v16 uses, so a preference set here would carry over if
    the same browser later opens v16 directly (and vice versa).
    ================================================================ */
-const PD_TOGGLE_COLS = ['remarks', 'stage', 'unitprice', 'depot', 'nextdue', 'ownersse', 'processpdc', 'manualpdc'];
+const PD_TOGGLE_COLS = ['remarks', 'stage', 'unitprice', 'depot', 'nextdue', 'ownersse', 'processpdc', 'manualpdc', 'pendingwith', 'status'];
 const PD_TOGGLE_GROUPS = {
   indent: ['indentno', 'indentdate', 'tendercalledon', 'tenderopenedon'],
   loapo:  ['vendorname', 'loaponumber', 'loapodate'],
   inward: ['deliverydate', 'commissioningdate', 'ptcdate', 'crnno', 'crndate'],
 };
+// Pending With used to be mandatory (always shown, no toggle at all).
+// Now that it's a genuine PD_TOGGLE_COLS entry, a person who's never
+// touched Column Settings must still see it by default — this is the
+// ONLY column whose absence of a saved preference means "visible", so
+// existing users don't lose it on first load after this change. Status
+// is a brand-new column with no prior "always shown" expectation, so
+// it defaults off like every other optional column.
+const PD_DEFAULT_VISIBLE_COLS = new Set(['pendingwith']);
+function pdColDefaultShow(col, prefs) {
+  return prefs.cols[col] !== undefined ? !!prefs.cols[col] : PD_DEFAULT_VISIBLE_COLS.has(col);
+}
 
 function pdLoadColumnPrefs() {
   try {
@@ -3627,7 +3638,7 @@ function pdApplyColumnVisibility() {
   // selects #pd_proc_table itself, not its descendants, causing the
   // entire table to vanish when that attribute's column is hidden.
   PD_TOGGLE_COLS.forEach(col => {
-    const show = !!prefs.cols[col];
+    const show = pdColDefaultShow(col, prefs);
     document.querySelectorAll(`#pd_proc_table [data-col="${col}"], #pd_bill_table [data-col="${col}"]`)
       .forEach(el => { el.style.display = show ? '' : 'none'; });
   });
@@ -3675,7 +3686,7 @@ function pdComputeFrozenOffsets(prefs) {
   let running = 0;
   const rules = [];
   PD_FROZEN_COLS.forEach(({ col, width, always }) => {
-    const visible = always || !!prefs.cols[col];
+    const visible = always || pdColDefaultShow(col, prefs);
     if (!visible) return;
     rules.push(`th[data-col="${col}"],td[data-col="${col}"]{position:sticky;left:${running}px;}`);
     running += width;
@@ -3686,7 +3697,7 @@ function pdComputeFrozenOffsets(prefs) {
 function pdSyncColumnPanel() {
   const prefs = pdLoadColumnPrefs();
   document.querySelectorAll('#pd_col_panel input[data-col]').forEach(cb => {
-    cb.checked = !!prefs.cols[cb.dataset.col];
+    cb.checked = pdColDefaultShow(cb.dataset.col, prefs);
   });
   document.querySelectorAll('#pd_col_panel input[data-grp]').forEach(cb => {
     cb.checked = !!prefs.grps[cb.dataset.grp];
@@ -3886,6 +3897,60 @@ async function pdGetTat() {
   return _processTatCache;
 }
 
+// Dynamically builds a status -> color map from whatever statuses
+// actually exist in process_tat right now — no hardcoded status list
+// to keep in sync by hand; change the table and the colors update
+// automatically, matching this codebase's TAT-driven philosophy
+// everywhere else. Ordered by each status's own lowest priority number
+// (lowest = most advanced, per this table's established convention —
+// see siCalcStatus()), so the gradient runs green (closest to
+// completion) toward red (earliest stage of the pipeline). On Hold /
+// Dropped are fixed exception colors, not part of the linear
+// progression — matching the same convention already used in the
+// Process Summary tab's STATUS_COLORS.
+let _statusColorMapCache = null;
+let _statusColorMapCacheSize = -1;
+function pdGetStatusColor(status) {
+  const tat = _processTatCache || [];
+  if (!_statusColorMapCache || _statusColorMapCacheSize !== tat.length) {
+    const rank = {}; // normalized status -> { label, priority }
+    tat.forEach(t => {
+      const norm = pdNorm(t.status);
+      if (!norm || norm === 'on hold' || norm === 'dropped') return;
+      const pr = parseInt(t.priority, 10) || 0;
+      if (!(norm in rank) || pr < rank[norm].priority) rank[norm] = { label: t.status, priority: pr };
+    });
+    const ordered = Object.values(rank).sort((a, b) => a.priority - b.priority); // most-advanced (green) first
+    const map = {};
+    const n = ordered.length;
+    ordered.forEach((entry, i) => {
+      const hue = n <= 1 ? 140 : 140 - (140 * (i / (n - 1))); // 140=green .. 0=red
+      map[pdNorm(entry.label)] = `hsl(${hue.toFixed(0)}, 62%, 55%)`;
+    });
+    map['on hold'] = '#ef4444';
+    map['dropped'] = '#6b7280';
+    _statusColorMapCache = map;
+    _statusColorMapCacheSize = tat.length;
+  }
+  return _statusColorMapCache[pdNorm(status)] || 'var(--text-muted)';
+}
+
+// Conditional formatting class for Next Process Due On: overdue (past),
+// due today, or due within the next 3 days. Anything further out gets
+// no special styling at all, per spec.
+function pdNdoClass(dateStr) {
+  if (!dateStr) return '';
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return '';
+  d.setHours(0, 0, 0, 0);
+  const diffDays = Math.round((d - today) / 86400000);
+  if (diffDays < 0) return 'ndo-overdue';
+  if (diffDays === 0) return 'ndo-today';
+  if (diffDays <= 3) return 'ndo-upcoming';
+  return '';
+}
+
 function pdDateClass(dateStr) {
   if (!dateStr) return '';
   const today = new Date().toISOString().split('T')[0];
@@ -4003,7 +4068,14 @@ async function pdRecalcFromTat(sid, stageName) {
     const ndoEl = rowEl.querySelector('.ms-ndo-calc');
     if (pwEl)  pwEl.textContent  = pendingWith;
     if (pdcEl) pdcEl.textContent = processPdc;
-    if (ndoEl) ndoEl.textContent = nextDueOn;
+    if (ndoEl) {
+      ndoEl.textContent = nextDueOn;
+      // Keep the overdue/today/upcoming highlight in sync with the
+      // freshly computed date too — otherwise the live preview shows
+      // the new date but a stale (or missing) highlight until the next
+      // full table re-render.
+      ndoEl.className = `pd-ro ms-ndo-calc ${pdNdoClass(nextDueOn)}`;
+    }
   }
 
   if (pendingWith) pdMarkDirty('proc', sid, 'pending_with',        pendingWith);
@@ -4831,9 +4903,10 @@ function pdRenderProcTable() {
           ${pdBuildStageOptions(r.status, v('process_stage'))}
         </select>
       </td>
+      <td class="pd-ro pd-col" data-col="status"><span class="badge" style="background:${pdGetStatusColor(r.status)}22;color:${pdGetStatusColor(r.status)};border:1px solid ${pdGetStatusColor(r.status)}55;">${r.status || '—'}</span></td>
       <td class="pd-ro muted pd-col pd-frozen" data-col="unitprice">${r.unit_price ? 'Rs.' + Number(r.unit_price).toLocaleString('en-IN') : '—'}</td>
       <td class="pd-ro muted pd-col pd-frozen" data-col="depot">${r.consignee_depot || '—'}</td>
-      <td class="pd-cell pd-col pd-frozen" data-col="nextdue" title="Auto-calculated: field date + next stage TAT"><span class="pd-ro ms-ndo-calc" style="color:var(--accent-green);font-family:'Share Tech Mono',monospace;font-size:9px;">${r.next_process_due_on || '—'}</span></td>
+      <td class="pd-cell pd-col pd-frozen" data-col="nextdue" title="Auto-calculated: field date + next stage TAT"><span class="pd-ro ms-ndo-calc ${pdNdoClass(r.next_process_due_on)}" style="color:var(--accent-green);font-family:'Share Tech Mono',monospace;font-size:9px;">${r.next_process_due_on || '—'}</span></td>
       <td class="pd-ro muted pd-col pd-frozen" data-col="ownersse">${r.owner_sse || '—'}</td>
       <td class="pd-cell pd-col pd-frozen" data-col="processpdc" title="Auto-calculated: field date + remaining TAT"><span class="pd-ro ms-pdc-calc ${pdDateClass(r.process_pdc)}" style="color:var(--accent-cyan);font-family:'Share Tech Mono',monospace;font-size:9px;">${r.process_pdc || '—'}</span></td>
       <td class="pd-cell" data-col="pendingwith"><span class="pd-ro ms-pw-calc" style="color:var(--accent-gold);font-family:'Share Tech Mono',monospace;font-size:9px;">${r.pending_with || '—'}</span></td>
@@ -5340,9 +5413,10 @@ function pdRenderBillTable() {
           ${pdBuildStageOptions(r.status, v('process_stage'))}
         </select>
       </td>
+      <td class="pd-ro pd-col" data-col="status"><span class="badge" style="background:${pdGetStatusColor(r.status)}22;color:${pdGetStatusColor(r.status)};border:1px solid ${pdGetStatusColor(r.status)}55;">${r.status || '—'}</span></td>
       <td class="pd-ro muted pd-col pd-frozen" data-col="unitprice">${r.unit_price ? 'Rs.' + Number(r.unit_price).toLocaleString('en-IN') : '—'}</td>
       <td class="pd-ro muted pd-col pd-frozen" data-col="depot">${r.processing_depot || '—'}</td>
-      <td class="pd-cell pd-col pd-frozen" data-col="nextdue" title="Auto-calculated: field date + next stage TAT"><span class="pd-ro ms-ndo-calc" style="color:var(--accent-green);font-family:'Share Tech Mono',monospace;font-size:9px;">${r.next_process_due_on || '—'}</span></td>
+      <td class="pd-cell pd-col pd-frozen" data-col="nextdue" title="Auto-calculated: field date + next stage TAT"><span class="pd-ro ms-ndo-calc ${pdNdoClass(r.next_process_due_on)}" style="color:var(--accent-green);font-family:'Share Tech Mono',monospace;font-size:9px;">${r.next_process_due_on || '—'}</span></td>
       <td class="pd-ro muted pd-col pd-frozen" data-col="ownersse">${r.owner_sse || '—'}</td>
       <td class="pd-cell pd-col pd-frozen" data-col="processpdc" title="Auto-calculated: field date + remaining TAT"><span class="pd-ro ms-pdc-calc ${pdDateClass(r.process_pdc)}" style="color:var(--accent-cyan);font-family:'Share Tech Mono',monospace;font-size:9px;">${r.process_pdc || '—'}</span></td>
       <td class="pd-cell" data-col="pendingwith"><span class="pd-ro ms-pw-calc" style="color:var(--accent-gold);font-family:'Share Tech Mono',monospace;font-size:9px;">${r.pending_with || '—'}</span></td>
