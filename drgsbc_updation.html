@@ -169,10 +169,13 @@ th[data-col="nextdue"],td[data-col="nextdue"]{width:100px;min-width:100px;max-wi
 th[data-col="ownersse"],td[data-col="ownersse"]{width:95px;min-width:95px;max-width:95px;}
 th[data-col="processpdc"],td[data-col="processpdc"]{width:100px;min-width:100px;max-width:100px;}
 th[data-col="pendingwith"],td[data-col="pendingwith"]{width:110px;min-width:110px;max-width:110px;}
-th[data-col="manualpdc"],td[data-col="manualpdc"]{width:120px;min-width:120px;max-width:120px;}
+td[data-col="pendingwith"]{white-space:normal;}
 th[data-col="loaponumber"],td[data-col="loaponumber"]{width:150px;min-width:150px;}
 th[data-col="indentno"],td[data-col="indentno"]{width:190px;min-width:190px;}
 .table-panel{background:var(--bg-panel);border:1px solid var(--border);}
+.ndo-overdue{background:rgba(255,56,96,0.14);border:1px solid var(--accent-red);box-shadow:0 0 6px rgba(255,56,96,0.35);border-radius:4px;padding:3px 8px;display:inline-block;}
+.ndo-today{background:rgba(255,159,10,0.14);border:1px solid #ff9f0a;box-shadow:0 0 6px rgba(255,159,10,0.35);border-radius:4px;padding:3px 8px;display:inline-block;}
+.ndo-upcoming{background:rgba(255,214,10,0.12);border:1px solid var(--accent-gold);box-shadow:0 0 6px rgba(255,214,10,0.3);border-radius:4px;padding:3px 8px;display:inline-block;}
 </style>
 </head>
 <body>
@@ -690,6 +693,8 @@ if (window.self !== window.top) document.documentElement.classList.add('embedded
                     <label class="pd-col-toggle"><input type="checkbox" data-col="nextdue"> Next Process Due On</label>
                     <label class="pd-col-toggle"><input type="checkbox" data-col="ownersse"> Owner / SSE</label>
                     <label class="pd-col-toggle"><input type="checkbox" data-col="processpdc"> Process PDC</label>
+                    <label class="pd-col-toggle"><input type="checkbox" data-col="pendingwith"> Pending With</label>
+                    <label class="pd-col-toggle"><input type="checkbox" data-col="status"> Status</label>
 					<label class="pd-col-toggle"><input type="checkbox" data-col="manualpdc"> Manual PDC</label>
                     <div id="pd_col_group_pills">
                       <div style="border-top:1px solid var(--border);margin:3px 0 9px;"></div>
@@ -743,6 +748,7 @@ if (window.self !== window.top) document.documentElement.classList.add('embedded
                     <th class="pd-th pd-frozen" data-col="latestcost">LATEST COST</th>
                     <th class="pd-th pd-col" data-col="remarks">REMARKS</th>
                     <th class="pd-th pd-col" style="color:var(--accent-gold);" data-col="stage">STAGE</th>
+                    <th class="pd-th pd-col" data-col="status">STATUS</th>
                     <th class="pd-th pd-col" data-col="unitprice">UNIT PRICE</th>
                     <th class="pd-th pd-col" data-col="depot">CONSIGNEE DEPOT</th>
                     <th class="pd-th pd-col" data-col="nextdue">NEXT DUE ON</th>
