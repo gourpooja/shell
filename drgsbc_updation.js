@@ -3336,6 +3336,12 @@ function clAttachmentsAvailable() {
 function clBaseUrl() {
   return 'http://10.205.50.15:8088';
 }
+// Must exactly match CHRONOLOG_ACCESS_TOKEN in chronolog-config.php on
+// the NAS — if you rotate one, rotate the other, or every
+// upload/download starts failing with 403. This is a casual-access
+// deterrent, not real security — see chronolog-config.php's own
+// comment for why.
+const CHRONOLOG_TOKEN = 'bb818f38347d5c4900608ff81d9a3ad2209a71a490683866';
 
 async function clRecordEvent() {
   const statusEl = document.getElementById('cl_entry_status');
@@ -3370,6 +3376,7 @@ async function clRecordEvent() {
       const formData = new FormData();
       formData.append('file', fileInput.files[0]);
       formData.append('path', path);
+      formData.append('token', CHRONOLOG_TOKEN);
       const uploadResp = await fetch(`${clBaseUrl()}/chronolog-upload.php`, { method: 'POST', body: formData });
       const uploadResult = await uploadResp.json();
       if (!uploadResult.success) throw new Error(uploadResult.error || 'Upload failed');
@@ -3579,8 +3586,12 @@ async function clDeleteEvent(chronoId) {
 }
 
 function clDownloadFile(filePath, fileName) {
+  // Fixed: this used to point straight at the static file URL, which
+  // the .htaccess in chronolog_uploads/ now deliberately blocks — every
+  // download must go through chronolog-download.php's token check
+  // instead, same protection as uploads already had.
   const a = document.createElement('a');
-  a.href = `${clBaseUrl()}/` + filePath;
+  a.href = `${clBaseUrl()}/chronolog-download.php?token=${encodeURIComponent(CHRONOLOG_TOKEN)}&path=${encodeURIComponent(filePath)}&name=${encodeURIComponent(fileName)}`;
   a.download = fileName;
   a.target = '_blank';
   document.body.appendChild(a);
