@@ -3540,17 +3540,12 @@ async function clLoadHistory() {
         </div>
 
         <div style="display:flex;gap:6px;flex-shrink:0;">
-          ${ev.file_path ? (clAttachmentsAvailable()
-            ? `<button data-cl-action="download" data-file-path="${ev.file_path}" data-file-name="${ev.file_name || 'file'}"
-                style="background:transparent;border:1px solid var(--accent-warn);color:var(--accent-warn);
-                padding:4px 8px;border-radius:4px;cursor:pointer;font-family:'Share Tech Mono',monospace;font-size:9px;">
-                ↓ FILE
-              </button>`
-            : `<button disabled title="Open the Shell via the NAS's direct address to download attachments"
-                style="background:transparent;border:1px solid var(--text-muted);color:var(--text-muted);
-                padding:4px 8px;border-radius:4px;cursor:not-allowed;font-family:'Share Tech Mono',monospace;font-size:9px;">
-                ↓ FILE (LAN ONLY)
-              </button>`) : ''}
+          ${ev.file_path ? `<button data-cl-action="preview" data-file-path="${ev.file_path}" data-file-name="${ev.file_name || 'file'}"
+              style="background:transparent;border:1px solid var(--accent-warn);color:var(--accent-warn);
+              padding:4px 8px;border-radius:4px;cursor:pointer;font-family:'Share Tech Mono',monospace;font-size:9px;"
+              title="${clAttachmentsAvailable() ? '' : 'May only load on LAN or with WARP connected'}">
+              ↓ FILE${clAttachmentsAvailable() ? '' : ' *'}
+            </button>` : ''}
           ${canEdit ? `<button data-cl-action="delete" data-chrono-id="${ev.chrono_id}"
             style="background:transparent;border:1px solid var(--accent-red);color:var(--accent-red);
             padding:4px 8px;border-radius:4px;cursor:pointer;font-family:'Share Tech Mono',monospace;font-size:9px;">
@@ -3570,7 +3565,7 @@ document.getElementById('cl_include_syslogs').addEventListener('change', clLoadH
 document.getElementById('cl_history_list').addEventListener('click', (e) => {
   const btn = e.target.closest('[data-cl-action]');
   if (!btn) return;
-  if (btn.dataset.clAction === 'download') clDownloadFile(btn.dataset.filePath, btn.dataset.fileName);
+  if (btn.dataset.clAction === 'preview') clShowFilePreviewModal(btn.dataset.filePath, btn.dataset.fileName);
   if (btn.dataset.clAction === 'delete') clDeleteEvent(btn.dataset.chronoId);
 });
 
@@ -3585,18 +3580,82 @@ async function clDeleteEvent(chronoId) {
   }
 }
 
+// Builds the token-gated URL for a Chronolog attachment. disposition
+// 'inline' lets the browser render PDFs/images directly (used inside
+// the preview modal below); 'attachment' forces a download regardless
+// of type (used by the modal's Download button, and by the direct
+// clDownloadFile() helper for anything that opens outside the modal).
+function clFileUrl(filePath, fileName, disposition) {
+  return `${clBaseUrl()}/chronolog-download.php?token=${encodeURIComponent(CHRONOLOG_TOKEN)}`
+    + `&path=${encodeURIComponent(filePath)}&name=${encodeURIComponent(fileName)}&disposition=${disposition}`;
+}
+
 function clDownloadFile(filePath, fileName) {
-  // Fixed: this used to point straight at the static file URL, which
-  // the .htaccess in chronolog_uploads/ now deliberately blocks — every
-  // download must go through chronolog-download.php's token check
-  // instead, same protection as uploads already had.
   const a = document.createElement('a');
-  a.href = `${clBaseUrl()}/chronolog-download.php?token=${encodeURIComponent(CHRONOLOG_TOKEN)}&path=${encodeURIComponent(filePath)}&name=${encodeURIComponent(fileName)}`;
+  a.href = clFileUrl(filePath, fileName, 'attachment');
   a.download = fileName;
   a.target = '_blank';
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
+}
+
+// Self-contained runtime modal (same pattern as gdShowOverwriteModal()
+// and the Sub-Items deactivate confirmation — injected via JS, no
+// static HTML needed) showing an inline PDF/image preview with a
+// Download button underneath. Anything else (doc/xls/csv) skips
+// straight to a "no preview available" message, since the browser
+// can't render those inline regardless of Content-Disposition.
+function clShowFilePreviewModal(filePath, fileName) {
+  const existing = document.getElementById('cl_preview_modal');
+  if (existing) existing.remove();
+
+  const ext = (fileName.split('.').pop() || '').toLowerCase();
+  const isPdf = ext === 'pdf';
+  const isImage = ['jpg', 'jpeg', 'png', 'gif'].includes(ext);
+  const inlineUrl = clFileUrl(filePath, fileName, 'inline');
+  const downloadUrl = clFileUrl(filePath, fileName, 'attachment');
+
+  let previewHtml;
+  if (isPdf) {
+    previewHtml = `<iframe src="${inlineUrl}" style="width:100%;height:70vh;border:1px solid var(--border);border-radius:6px;background:#fff;"></iframe>`;
+  } else if (isImage) {
+    previewHtml = `<img src="${inlineUrl}" style="max-width:100%;max-height:70vh;display:block;margin:0 auto;border-radius:6px;">`;
+  } else {
+    previewHtml = `<div style="text-align:center;padding:50px 20px;font-family:'Share Tech Mono',monospace;font-size:11px;color:var(--text-muted);">
+      No inline preview for .${ext.toUpperCase() || 'this'} files — use Download below.
+    </div>`;
+  }
+
+  const laneNote = clAttachmentsAvailable() ? '' : `
+    <div style="font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--accent-gold);margin-bottom:10px;">
+      ⚠ You're viewing the Shell via its public URL — this may only load if you're on the NAS network or connected via WARP.
+    </div>`;
+
+  const overlay = document.createElement('div');
+  overlay.id = 'cl_preview_modal';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(4,8,15,0.88);backdrop-filter:blur(6px);z-index:2000;display:flex;align-items:center;justify-content:center;';
+  overlay.innerHTML = `
+    <div style="background:var(--modal-bg);border:1px solid var(--border-accent);max-width:800px;width:95%;max-height:90vh;overflow-y:auto;padding:24px;position:relative;animation:modalin 0.25s ease;">
+      <div style="position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,var(--accent-blue),var(--accent-cyan));"></div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;gap:12px;">
+        <div style="font-family:Rajdhani,sans-serif;font-weight:700;font-size:15px;letter-spacing:1px;color:var(--accent-cyan);word-break:break-all;">${fileName}</div>
+        <button id="cl_preview_close_btn" style="background:transparent;border:none;color:var(--text-muted);cursor:pointer;font-size:18px;flex-shrink:0;">✕</button>
+      </div>
+      ${laneNote}
+      <div id="cl_preview_body">${previewHtml}</div>
+      <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:18px;padding-top:14px;border-top:1px solid var(--border);">
+        <a href="${downloadUrl}" download="${fileName}"
+          style="background:linear-gradient(135deg,var(--accent-blue),var(--accent-cyan));border:none;color:var(--bg-dark);
+          padding:8px 20px;border-radius:6px;cursor:pointer;text-decoration:none;display:inline-block;
+          font-family:Rajdhani,sans-serif;font-weight:700;font-size:12px;letter-spacing:2px;">
+          ⬇ DOWNLOAD
+        </a>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+  document.getElementById('cl_preview_close_btn').addEventListener('click', () => overlay.remove());
 }
 
 async function clOnTabOpen() {
@@ -5033,6 +5092,101 @@ function pdHandleProcFieldChange(el, sid, field) {
    automatically (see core/services.js). Blocked entirely if any
    pending change fails date-sequence validation.
    ================================================================ */
+// Recomputes and writes status + process_stage + schedule (pending_with
+// / process_pdc / next_process_due_on) for ONE sub-item, from whatever
+// is currently true in the database. Shared by pdSaveAll() (after a
+// Process-tab save) AND by the Billing modal's save/reject flows — this
+// used to live ONLY inside pdSaveAll(), so recording, editing, or
+// rejecting a bill (e.g. adding a CO6 number/date) never triggered a
+// status/stage update at all, even though the Process tab's own save
+// button did. That's why these fields kept drifting until someone ran
+// the data-repair tool — the bill-save code path simply never called
+// into this logic in the first place.
+//
+// Always re-fetches the latest bill fresh from the DB rather than
+// trusting row.co6_date/co7_date/bill_description off PD.allRows —
+// those are only populated by a full pdFetchData() re-fetch and are
+// NOT updated live when a bill is saved through the modal, so trusting
+// them here would risk computing status from a stale bill even when
+// called right after a fresh save.
+async function pdRecalcStatusAndStageForSubItem(subItemId) {
+  const row = PD.allRows.find(r => String(r.sub_item_id) === String(subItemId));
+  if (!row) return;
+  try {
+    await pdGetTat();
+
+    let billDetail = { co6_date: '', co7_date: '', bill_description: '' };
+    try {
+      // Fetch a small recent batch rather than just limit=1, so a
+      // rejected bill (which must never drive status forward) doesn't
+      // shadow the actual latest valid one — same pdIsBillRejected()
+      // check already used everywhere else in this file for consistency.
+      const bills = await nxFetch(
+        `bill_detail?sub_item_id=eq.${subItemId}&select=co6_date,co7_date,bill_description,bill_status&order=created_at.desc&limit=5`
+      );
+      const latestValid = Array.isArray(bills) ? bills.find(b => !pdIsBillRejected(b)) : null;
+      if (latestValid) {
+        billDetail = {
+          co6_date: latestValid.co6_date || '',
+          co7_date: latestValid.co7_date || '',
+          bill_description: latestValid.bill_description || '',
+        };
+      }
+    } catch (e) {
+      console.warn('[DRGSBC] Could not fetch latest bill for status recalc, sub_item_id=' + subItemId, e.message);
+    }
+
+    const subItem = { sanctioned_on: row.sanctioned_on, de_submit_date: row.de_submit_date, de_vetted_on: row.de_vetted_on };
+    const procDetail = {
+      process_stage:    row.process_stage,
+      indent_date:      row.indent_date,
+      tender_called_on: row.tender_called_on,
+      tender_opened_on: row.tender_opened_on,
+      loa_po_date:      row.loa_po_date,
+      delivery_date:    row.delivery_date,
+      crn_date:         row.crn_date,
+    };
+
+    const wasResume = pdNorm(row.process_stage) === 'resume';
+    const newStatus = siCalcStatus(subItem, procDetail, billDetail);
+    const statusChanged = !!newStatus && pdNorm(newStatus) !== pdNorm(row.status);
+
+    if (statusChanged) {
+      await nxFetch(`sanction_sub_item?sub_item_id=eq.${subItemId}`,
+        { method: 'PATCH', body: { status: newStatus, updated_at: new Date().toISOString() }, prefer: 'return=representation' });
+      row.status = newStatus;
+    }
+
+    if (newStatus && (statusChanged || wasResume)) {
+      const tat = _processTatCache || [];
+      const autoStageRow = tat.filter(t => pdNorm(t.status) === pdNorm(newStatus)).sort((a, b) => (a.priority || 0) - (b.priority || 0))[0];
+      if (autoStageRow?.process_stage) {
+        const autoStage = autoStageRow.process_stage;
+        const sched = pdComputeSchedule(tat, autoStageRow, row);
+        await nxFetch(`process_detail?sub_item_id=eq.${subItemId}`, {
+          method: 'PATCH',
+          body: {
+            process_stage: autoStage,
+            pending_with: sched.pendingWith,
+            process_pdc: sched.processPdc || null,
+            next_process_due_on: sched.nextDueOn || null,
+            updated_at: new Date().toISOString(),
+          },
+          prefer: 'return=representation',
+        });
+        row.process_stage = autoStage;
+        row.pending_with = sched.pendingWith;
+        row.process_pdc = sched.processPdc;
+        row.next_process_due_on = sched.nextDueOn;
+      } else if (wasResume) {
+        console.warn('[DRGSBC] Resume could not resolve to a stage — no process_tat row found for status:', newStatus, 'sub_item_id:', subItemId);
+      }
+    }
+  } catch (e) {
+    console.warn('[DRGSBC] status/stage recalc failed for sub_item_id=' + subItemId, e.message);
+  }
+}
+
 async function pdSaveAll() {
   const hasDirtyProc = Object.keys(PD.dirtyProc).length > 0;
   const hasDirtyBill = Object.keys(PD.dirtyBill).length > 0;
@@ -5242,102 +5396,12 @@ async function pdSaveAll() {
     const errTotal = procErr + billErr;
     if (errTotal === 0) {
       // Auto-derive and save sanction_sub_item.status from the dates
-      // just written, same as v16.
-      // Fixed: ensure the TAT rules are actually loaded before relying
-      // on them for either status derivation or the process_stage
-      // auto-pick below — don't trust an ambient cache that may still
-      // be null if the user never opened the Stage dropdown this session.
-      await pdGetTat();
+      // just written, same as v16 — now via the shared helper above,
+      // so this and the Billing modal's save/reject flows can never
+      // drift apart again.
       const savedSubIds = new Set([...Object.keys(PD.dirtyProc), ...Object.keys(PD.dirtyBill)]);
       for (const subItemId of savedSubIds) {
-        try {
-          const row = PD.allRows.find(r => String(r.sub_item_id) === String(subItemId));
-          if (!row) continue;
-          // Fixed: de_submit_date/de_vetted_on live on sanction_sub_item,
-          // not process_detail — siCalcStatus() already knows to check
-          // subItem for them (procDetail?.x || subItem?.x), so pass them
-          // where they actually live instead of only on procDetail (which
-          // was always undefined for these two fields anyway pre-fix).
-          const subItem = { sanctioned_on: row.sanctioned_on, de_submit_date: row.de_submit_date, de_vetted_on: row.de_vetted_on };
-          const procDetail = {
-            process_stage:    row.process_stage,
-            indent_date:      row.indent_date,
-            tender_called_on: row.tender_called_on,
-            tender_opened_on: row.tender_opened_on,
-            loa_po_date:      row.loa_po_date,
-            delivery_date:    row.delivery_date,
-            crn_date:         row.crn_date,
-          };
-          const billDetail = { co6_date: row.co6_date, co7_date: row.co7_date, bill_description: row.bill_description };
-
-          // 'Resume' is a transient trigger picked from the Stage
-          // dropdown to say "leave On Hold/Dropped and recompute
-          // normally" — it is never itself a stored final stage.
-          // siCalcStatus()'s terminal short-circuit only matches literal
-          // 'On Hold'/'Dropped', so with process_stage='Resume' it
-          // already falls through to genuine date-driven computation —
-          // correct for STATUS. But the ordinary `newStatus !== row.status`
-          // guard below must not gate the STAGE update in this case: if
-          // the recomputed status happened to still equal what was
-          // already stored, 'Resume' would otherwise be left sitting in
-          // process_stage permanently instead of being replaced by the
-          // properly auto-picked stage.
-          // Fixed: normalized (trim + case-insensitive) comparisons —
-          // see pdNorm() note above siCalcStatus. Without this, a
-          // stored status/stage that's semantically correct but
-          // differently-cased than what siCalcStatus/process_tat
-          // produce would either trigger needless rewrites every save,
-          // or (worse) fail to match and silently skip the update.
-          const wasResume = pdNorm(row.process_stage) === 'resume';
-          const newStatus = siCalcStatus(subItem, procDetail, billDetail);
-          const statusChanged = !!newStatus && pdNorm(newStatus) !== pdNorm(row.status);
-
-          if (statusChanged) {
-            await nxFetch(`sanction_sub_item?sub_item_id=eq.${subItemId}`,
-              { method: 'PATCH', body: { status: newStatus, updated_at: new Date().toISOString() }, prefer: 'return=representation' });
-            row.status = newStatus;
-          }
-
-          if (newStatus && (statusChanged || wasResume)) {
-            const tat = _processTatCache || [];
-            const autoStageRow = tat.filter(t => pdNorm(t.status) === pdNorm(newStatus)).sort((a, b) => (a.priority || 0) - (b.priority || 0))[0];
-            if (autoStageRow?.process_stage) {
-              const autoStage = autoStageRow.process_stage;
-              // Fixed: whenever we're already inside this block (status
-              // genuinely changed, or Resume forced a full recompute), the
-              // schedule fields must be recomputed from THIS resolved
-              // stage's own TAT row too — not left as whatever the primary
-              // dirty-field loop already wrote earlier in this save. For
-              // Resume specifically, pdRecalcFromTat() no longer marks
-              // these dirty at all (its own TAT row is meaningless as a
-              // schedule source), so without this they'd be silently
-              // skipped entirely. Written unconditionally here (not gated
-              // on whether the stage TEXT happens to differ from before)
-              // so a rare coincidental stage-name match across two
-              // different statuses still gets its schedule refreshed.
-              const sched = pdComputeSchedule(tat, autoStageRow, row);
-              await nxFetch(`process_detail?sub_item_id=eq.${subItemId}`, {
-                method: 'PATCH',
-                body: {
-                  process_stage: autoStage,
-                  pending_with: sched.pendingWith,
-                  process_pdc: sched.processPdc || null,
-                  next_process_due_on: sched.nextDueOn || null,
-                  updated_at: new Date().toISOString(),
-                },
-                prefer: 'return=representation',
-              });
-              row.process_stage = autoStage;
-              row.pending_with = sched.pendingWith;
-              row.process_pdc = sched.processPdc;
-              row.next_process_due_on = sched.nextDueOn;
-            } else if (wasResume) {
-              console.warn('[DRGSBC] Resume could not resolve to a stage — no process_tat row found for status:', newStatus, 'sub_item_id:', subItemId);
-            }
-          }
-        } catch (e) {
-          console.warn('[DRGSBC] status update failed for sub_item_id=' + subItemId, e.message);
-        }
+        await pdRecalcStatusAndStageForSubItem(subItemId);
       }
 
       msgEl.style.color = 'var(--accent-green)';
@@ -5689,6 +5753,15 @@ async function pdSaveNewBill() {
     }
 
     await pdUpdateTotalBills(sid);
+    // Fixed: this bill save could easily change what status/stage the
+    // sub-item should be in (e.g. adding a CO6 number/date should move
+    // it toward 'Bill Submitted', CO7 + 'final' description toward
+    // 'Bill Passed') — but nothing on this save path ever triggered
+    // that recalculation before, only the Process tab's own Save All
+    // did. That's why these fields kept drifting until someone ran the
+    // data-repair tool. pdFetchData() below will re-pull the fresh
+    // values this writes.
+    await pdRecalcStatusAndStageForSubItem(sid);
 
     statusEl.style.color = 'var(--accent-green)';
     statusEl.textContent = isEdit ? '✓ Bill updated successfully' : '✓ Bill saved successfully';
@@ -5734,6 +5807,11 @@ async function pdRejectBillRow(billId) {
 
     showToast('BILL REJECTED');
     await pdUpdateTotalBills(b.sub_item_id);
+    // Rejecting a bill can also change the correct status (e.g. if the
+    // rejected bill's CO7 date was the only thing keeping status at
+    // 'Bill Passed', it should fall back once that bill no longer
+    // counts) — same fix as pdSaveNewBill() above.
+    await pdRecalcStatusAndStageForSubItem(b.sub_item_id);
 
     const row = PD.allRows.find(r => String(r.sub_item_id) === String(b.sub_item_id));
     await pdViewAllBills(b.sub_item_id, row?.sub_item_name || '');
