@@ -1289,7 +1289,7 @@ function esCalcNew(seq) {
 // ── Single delegated listener for the whole line-items tbody, covering
 //    both existing-row edit cells (data-es-edit/data-es-estimate/
 //    data-es-action-select) and new-item rows (data-es-new-calc). ──
-document.getElementById('es_items_body').addEventListener('change', (e) => {
+document.getElementById('es_items_body').addEventListener('input', (e) => {
   const el = e.target;
   const row = el.closest('tr[data-li-id]');
   if (row) {
@@ -5031,7 +5031,7 @@ const PD_DATE_FIELDS = new Set([
 // value is a complete YYYY-MM-DD string, and (2) debounce the actual
 // validation slightly so a burst of near-simultaneous fires collapses
 // into a single check after typing settles.
-document.getElementById('pd_proc_body').addEventListener('change', (e) => {
+document.getElementById('pd_proc_body').addEventListener('input', (e) => {
   const el = e.target;
   const sid = el.dataset.sid;
   const field = el.dataset.field;
@@ -5188,7 +5188,16 @@ async function pdRecalcStatusAndStageForSubItem(subItemId) {
 }
 
 async function pdSaveAll() {
+  // Force any in-progress edit to commit before checking dirty state —
+  // backstop for the 'input'-event fix above, in case some input type
+  // or browser doesn't fire it reliably.
+  const active = document.activeElement;
+  if (active && document.getElementById('pd_bottom_section')?.contains(active)) {
+    active.blur();
+  }
+
   const hasDirtyProc = Object.keys(PD.dirtyProc).length > 0;
+
   const hasDirtyBill = Object.keys(PD.dirtyBill).length > 0;
   if (!hasDirtyProc && !hasDirtyBill) { showToast('NO CHANGES TO SAVE'); return; }
 
@@ -5519,6 +5528,18 @@ function pdRenderBillTable() {
   pdApplyColumnVisibility();
   pdStyleDateInputs(document.getElementById('pd_tab_billing'));
 }
+document.getElementById('pd_bill_body').addEventListener('input', (e) => {
+  const el = e.target;
+  const sid = el.dataset.sid;
+  const field = el.dataset.field;
+  if (!sid || !field) return;
+  if (field === 'process_stage') {
+    pdMarkDirty('proc', sid, 'process_stage', el.value, el);
+    pdRecalcFromTat(sid, el.value);
+  } else {
+    pdMarkDirty('proc', sid, field, el.value, el);
+  }
+});
 
 document.getElementById('pd_bill_body').addEventListener('input', (e) => {
   if (e.target.dataset.field === 'remarks') e.target.title = e.target.value;
