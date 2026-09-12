@@ -593,6 +593,29 @@ async function runDiagnostic() {
   log('Diagnostic complete.', 'var(--accent-cyan)');
 }
 
+function gsheetSyncJSONP(url) {
+  return new Promise((resolve, reject) => {
+    const cbName = 'gsheetSyncCb_' + Date.now();
+    const timeoutId = setTimeout(() => {
+      cleanup();
+      reject(new Error('Timed out waiting for Apps Script response'));
+    }, 130000);
+
+    function cleanup() {
+      clearTimeout(timeoutId);
+      delete window[cbName];
+      if (script.parentNode) script.parentNode.removeChild(script);
+    }
+
+    window[cbName] = (data) => { cleanup(); resolve(data); };
+
+    const script = document.createElement('script');
+    script.src = url + (url.includes('?') ? '&' : '?') + 'callback=' + cbName;
+    script.onerror = () => { cleanup(); reject(new Error('Failed to reach Apps Script')); };
+    document.body.appendChild(script);
+  });
+}
+
 async function triggerGSheetSync() {
   const btn = document.getElementById('btnGsheetSync');
   const msg = document.getElementById('gsheet_sync_msg');
@@ -611,8 +634,7 @@ async function triggerGSheetSync() {
   msg.style.color = 'var(--text-muted)';
   msg.textContent = 'Contacting Apps Script...';
   try {
-    const res = await fetch(triggerUrl, { method: 'GET', signal: AbortSignal.timeout(130000) });
-    const data = await res.json();
+    const data = await gsheetSyncJSONP(triggerUrl);
     if (data.status === 'ok') {
       msg.style.color = 'var(--accent-green)';
       msg.textContent = '✅ ' + (data.rows || data.message || 'Sync complete') + ' @ ' + (data.timestamp || '');
@@ -624,13 +646,15 @@ async function triggerGSheetSync() {
     }
   } catch (e) {
     msg.style.color = 'var(--accent-red)';
-    msg.textContent = '✕ Cannot reach Apps Script — check the URL, or Apps Script deployment access settings';
+    msg.textContent = '✕ Cannot reach Apps Script — check the URL, or deployment access settings';
     showToast('✕ Sync server unreachable');
   } finally {
     btn.disabled = false;
     btn.textContent = '↑ SYNC TO GOOGLE SHEET NOW';
   }
 }
+
+
 document.getElementById('btnTestNexus').addEventListener('click', testNexusConnection);
 document.getElementById('btnTestSheets').addEventListener('click', testSheetsConnection);
 document.getElementById('nxToggleBtn').addEventListener('click', () => toggleConnection('nx'));
