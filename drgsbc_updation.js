@@ -6138,48 +6138,7 @@ function pdRenderSummaryList() {
     </table>`;
 }
 
-/* ================================================================
-   SYNC GSHEETS WITH SUPABASE VIEWS
-   ================================================================ */
 
-async function triggerGSheetSync() {
-  const btn = document.getElementById('btnGsheetSync');
-  const msg = document.getElementById('gsheet_sync_msg');
-  const cfg = getDbConfig();
-  const triggerUrl = cfg?.sheets?.url;
-
-  if (!triggerUrl) {
-    msg.style.color = 'var(--accent-red)';
-    msg.textContent = '✕ No Apps Script URL configured — set it in DATABASE tab above first';
-    showToast('NO SHEETS URL CONFIGURED', 'error');
-    return;
-  }
-
-  btn.disabled = true;
-  btn.textContent = '⌛ SYNCING...';
-  msg.style.color = 'var(--text-muted)';
-  msg.textContent = 'Contacting Apps Script...';
-  try {
-    const res = await fetch(triggerUrl, { method: 'GET', signal: AbortSignal.timeout(130000) });
-    const data = await res.json();
-    if (data.status === 'ok') {
-      msg.style.color = 'var(--accent-green)';
-      msg.textContent = '✅ ' + (data.rows || data.message || 'Sync complete') + ' @ ' + (data.timestamp || '');
-      showToast('✅ Google Sheet synced successfully!');
-    } else {
-      msg.style.color = 'var(--accent-red)';
-      msg.textContent = '✕ Error: ' + (data.message || 'Unknown error');
-      showToast('✕ Sync failed: ' + (data.message || ''));
-    }
-  } catch (e) {
-    msg.style.color = 'var(--accent-red)';
-    msg.textContent = '✕ Cannot reach Apps Script — check the URL / your connection';
-    showToast('✕ Sync server unreachable');
-  } finally {
-    btn.disabled = false;
-    btn.textContent = '↑ SYNC TO GOOGLE SHEET NOW';
-  }
-}
 /* ================================================================
    SUMMARY — GET PDF (lazy-loads html2canvas + jsPDF from CDN)
    ================================================================ */
