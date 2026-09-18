@@ -47,7 +47,7 @@ td{padding:7px 10px;border-bottom:1px solid rgba(26,58,92,0.3);color:var(--text-
 
 <div class="topbar">
   <h1>DRGSBC <span>DATA REPAIR</span></h1>
-  <div class="sub">Recalculates Status · Process Stage · Pending With · Process PDC · Next Due — ADMIN/MASTER ONLY</div>
+  <div class="sub">Recalculates Status · Process Stage · Pending With · Process PDC · Next Due · Owner SSE — ADMIN/MASTER ONLY</div>
   <div class="session-badge" id="sessionBadge">CHECKING SESSION…</div>
 </div>
 
@@ -88,10 +88,11 @@ td{padding:7px 10px;border-bottom:1px solid rgba(26,58,92,0.3);color:var(--text-
             <th>PENDING WITH (current → new)</th>
             <th>PROCESS PDC (current → new)</th>
             <th>NEXT DUE ON (current → new)</th>
+            <th>OWNER SSE (current → new)</th>
           </tr>
         </thead>
         <tbody id="previewBody">
-          <tr><td colspan="8" style="text-align:center;padding:30px;color:var(--text-muted);font-family:'Share Tech Mono',monospace;">CLICK ANALYZE TO BEGIN</td></tr>
+          <tr><td colspan="9" style="text-align:center;padding:30px;color:var(--text-muted);font-family:'Share Tech Mono',monospace;">CLICK ANALYZE TO BEGIN</td></tr>
         </tbody>
       </table>
     </div>
@@ -193,19 +194,46 @@ function deriveStageFromStatus(tat, status) {
   return rows[0]?.process_stage || null;
 }
 
+// Finds the single active FIELD-AGENT whose assigned depot and plan head
+// match this sub-item. Same logic as the Owner SSE correction SQL we ran
+// (upper(role)='FIELD-AGENT', depot in array, plan_head::text in array).
+// Returns full_name, or '' if no unique match found.
+function computeOwnerSSE(userRoles, processingDepot, planHead) {
+  if (!processingDepot || !planHead) return '';
+  const planStr = String(planHead);
+  const matches = userRoles.filter(ur =>
+    ur.role?.toUpperCase() === 'FIELD-AGENT' &&
+    (ur.state || 'active').toLowerCase() === 'active' &&
+    Array.isArray(ur.assigned_processing_depots) &&
+    ur.assigned_processing_depots.includes(processingDepot) &&
+    Array.isArray(ur.assigned_plan_heads) &&
+    ur.assigned_plan_heads.includes(planStr)
+  );
+  // Only auto-assign when there's exactly one match — ambiguous cases
+  // (two field-agents covering same depot+plan_head) are left blank so
+  // a human resolves them rather than the tool silently picking one.
+  return matches.length === 1 ? (matches[0].full_name || '') : '';
+}
+
 let PLAN = []; // computed diffs, built by analyze()
 
 async function fetchAll() {
   const cfg = getDbConfig();
   if (!cfg?.nexus?.url || !cfg?.nexus?.key) throw new Error('No Nexus connection configured.');
 
-  const tat = await nxFetch('process_tat?select=*&order=priority.asc');
+  const tat       = await nxFetch('process_tat?select=*&order=priority.asc');
+  // Fetch all active field-agents with their depot/plan-head assignments
+  // so computeOwnerSSE() can match them against each sub-item.
+  const userRoles = await nxFetch(
+    'user_roles?select=full_name,role,state,assigned_processing_depots,assigned_plan_heads' +
+    '&role=eq.FIELD-AGENT&state=neq.inactive'
+  ) || [];
 
   let rawSubItems = [];
   let url = 'sanction_sub_item?select=' +
-    'sub_item_id,sub_item_name,status,de_submit_date,de_vetted_on,' +
-    'sanction_line_item!inner(line_item_id,li_code,sanction_header!inner(sanctioned_on)),' +
-    'process_detail(process_id,process_stage,process_pdc,next_process_due_on,pending_with,' +
+    'sub_item_id,sub_item_name,status,de_submit_date,de_vetted_on,processing_depot,' +
+    'sanction_line_item!inner(line_item_id,li_code,sanction_header!inner(sanctioned_on,plan_head)),' +
+    'process_detail(process_id,process_stage,process_pdc,next_process_due_on,pending_with,owner_sse,' +
       'indent_date,tender_called_on,tender_opened_on,loa_po_date,delivery_date,crn_date),' +
     'bill_detail(co6_date,co7_date)' +
     '&order=sub_item_name.asc';
@@ -219,10 +247,10 @@ async function fetchAll() {
     offset += PAGE_SIZE;
   } while (batch.length === PAGE_SIZE);
 
-  return { tat: tat || [], rows: rawSubItems };
+  return { tat: tat || [], rows: rawSubItems, userRoles };
 }
 
-function buildPlan(tat, rawRows, onlyBlank) {
+function buildPlan(tat, rawRows, userRoles, onlyBlank) {
   const plan = [];
   rawRows.forEach(r => {
     const li = r.sanction_line_item || {};
@@ -232,7 +260,9 @@ function buildPlan(tat, rawRows, onlyBlank) {
     const bdArr = Array.isArray(r.bill_detail) ? r.bill_detail : (r.bill_detail ? [r.bill_detail] : []);
     const bd = bdArr.length ? bdArr[bdArr.length - 1] : {};
 
-    if (onlyBlank && r.status && p.process_stage) return; // nothing to fix, skip
+    // When "only fix blanks" is checked, skip rows where ALL five fields
+    // are already set — if any one is missing, still include the row.
+    if (onlyBlank && r.status && p.process_stage && p.pending_with && p.owner_sse) return;
 
     const subItem = { sanctioned_on: h.sanctioned_on, de_submit_date: r.de_submit_date, de_vetted_on: r.de_vetted_on };
     const procDetail = {
@@ -259,20 +289,30 @@ function buildPlan(tat, rawRows, onlyBlank) {
     };
     const sched = computeSchedule(tat, scheduleRow);
 
+    // Compute owner_sse from the sub-item's processing_depot and the
+    // sanction's plan_head — same logic as the bulk Owner SSE SQL correction.
+    const processingDepot = r.processing_depot || '';
+    const planHead        = h.plan_head || '';
+    const newOwnerSSE     = computeOwnerSSE(userRoles, processingDepot, planHead);
+    // Only override an existing owner_sse if it's currently blank —
+    // never silently reassign one that a human has deliberately set.
+    const resolvedOwnerSSE = (!p.owner_sse || p.owner_sse === '—') ? newOwnerSSE : (p.owner_sse || '');
+
     const changed =
       newStatus !== (r.status || '') ||
       newStage !== (p.process_stage || '') ||
       sched.pendingWith !== (p.pending_with || '') ||
       sched.processPdc !== (p.process_pdc || '') ||
-      sched.nextDueOn !== (p.next_process_due_on || '');
+      sched.nextDueOn !== (p.next_process_due_on || '') ||
+      resolvedOwnerSSE !== (p.owner_sse || '');
 
     if (!changed) return;
 
     plan.push({
       sub_item_id: r.sub_item_id, sub_item_name: r.sub_item_name, li_code: li.li_code || '',
       process_id: p.process_id || null,
-      cur: { status: r.status || '', stage: p.process_stage || '', pw: p.pending_with || '', pdc: p.process_pdc || '', ndo: p.next_process_due_on || '' },
-      next: { status: newStatus, stage: newStage, pw: sched.pendingWith, pdc: sched.processPdc, ndo: sched.nextDueOn },
+      cur: { status: r.status || '', stage: p.process_stage || '', pw: p.pending_with || '', pdc: p.process_pdc || '', ndo: p.next_process_due_on || '', sse: p.owner_sse || '' },
+      next: { status: newStatus, stage: newStage, pw: sched.pendingWith, pdc: sched.processPdc, ndo: sched.nextDueOn, sse: resolvedOwnerSSE },
     });
   });
   return plan;
@@ -286,7 +326,7 @@ function cell(curVal, nextVal) {
 function renderPreview(plan) {
   const body = document.getElementById('previewBody');
   if (!plan.length) {
-    body.innerHTML = `<tr><td colspan="8" style="text-align:center;padding:30px;color:var(--accent-green);font-family:'Share Tech Mono',monospace;">NO DIFFERENCES FOUND — NOTHING TO FIX</td></tr>`;
+    body.innerHTML = `<tr><td colspan="9" style="text-align:center;padding:30px;color:var(--accent-green);font-family:'Share Tech Mono',monospace;">NO DIFFERENCES FOUND — NOTHING TO FIX</td></tr>`;
     return;
   }
   body.innerHTML = plan.map((row, i) => `
@@ -299,7 +339,12 @@ function renderPreview(plan) {
       <td>${cell(row.cur.pw, row.next.pw)}</td>
       <td>${cell(row.cur.pdc, row.next.pdc)}</td>
       <td>${cell(row.cur.ndo, row.next.ndo)}</td>
+      <td>${cell(row.cur.sse, row.next.sse)}</td>
     </tr>`).join('');
+  // Also fix the "NO DIFFERENCES FOUND" colspan to match 9 columns
+  if (!plan.length) {
+    body.innerHTML = `<tr><td colspan="9" style="text-align:center;padding:30px;color:var(--accent-green);font-family:'Share Tech Mono',monospace;">NO DIFFERENCES FOUND — NOTHING TO FIX</td></tr>`;
+  }
 }
 
 async function analyze() {
@@ -313,10 +358,11 @@ async function analyze() {
   pill.style.display = 'none';
 
   try {
-    const { tat, rows } = await fetchAll();
+    const { tat, rows, userRoles } = await fetchAll();
     if (!tat.length) throw new Error('process_tat table is empty or unreachable — cannot compute schedules.');
+    if (!userRoles.length) console.warn('[repair] No FIELD-AGENT users found — owner_sse will not be computed.');
     const onlyBlank = document.getElementById('optOnlyBlank').checked;
-    PLAN = buildPlan(tat, rows, onlyBlank);
+    PLAN = buildPlan(tat, rows, userRoles, onlyBlank);
     renderPreview(PLAN);
     statusEl.className = 'status-line ok';
     statusEl.textContent = `✓ Analyzed ${rows.length} sub-items · ${PLAN.length} need changes`;
@@ -349,6 +395,10 @@ async function apply() {
       const pdBody = {
         process_stage: row.next.stage, pending_with: row.next.pw,
         process_pdc: row.next.pdc || null, next_process_due_on: row.next.ndo || null,
+        // Only write owner_sse when we actually computed one — an empty
+        // string from computeOwnerSSE (no unique match found) is left as
+        // null rather than overwriting with blank.
+        ...(row.next.sse ? { owner_sse: row.next.sse } : {}),
         updated_at: new Date().toISOString(),
       };
       if (row.process_id) {
@@ -356,7 +406,7 @@ async function apply() {
       } else {
         await nxFetch('process_detail', {
           method: 'POST',
-          body: { sub_item_id: row.sub_item_id, owner_sse: '—', created_at: new Date().toISOString(), ...pdBody },
+          body: { sub_item_id: row.sub_item_id, created_at: new Date().toISOString(), ...pdBody },
           prefer: 'return=minimal',
         });
       }
