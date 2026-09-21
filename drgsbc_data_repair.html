@@ -235,7 +235,7 @@ async function fetchAll() {
     'sanction_line_item!inner(line_item_id,li_code,sanction_header!inner(sanctioned_on,plan_head)),' +
     'process_detail(process_id,process_stage,process_pdc,next_process_due_on,pending_with,owner_sse,' +
       'indent_date,tender_called_on,tender_opened_on,loa_po_date,delivery_date,crn_date),' +
-    'bill_detail(co6_date,co7_date)' +
+	  'bill_detail(co6_date,co7_date,bill_description)' +
     '&order=sub_item_name.asc';
 
   const PAGE_SIZE = 1000;
@@ -270,8 +270,7 @@ function buildPlan(tat, rawRows, userRoles, onlyBlank) {
       tender_opened_on: p.tender_opened_on || '', loa_po_date: p.loa_po_date || '', delivery_date: p.delivery_date || '',
       crn_date: p.crn_date || '',
     };
-    const billDetail = { co6_date: bd.co6_date || '', co7_date: bd.co7_date || '' };
-
+    const billDetail = { co6_date: bd.co6_date, co7_date: bd.co7_date, bill_description: bd.bill_description };
     const newStatus = siCalcStatus(subItem, procDetail, billDetail);
     // Preserve an existing process_stage if it's already a terminal
     // manual override (On Hold / Dropped) — siCalcStatus already
