@@ -485,6 +485,14 @@ function addLineItemUI() {
   totalItemsRendered++;
   const id = lineItemCount;
   const container = document.getElementById('lineItemsContainer');
+  // Default LI code is based on the actual row count currently in the
+  // DOM, not the monotonic totalItemsRendered counter — that counter
+  // never resets after a full-form reset (container wiped via
+  // innerHTML='' bypasses removeLineItemUI()'s decrement), so it would
+  // keep climbing across sanctions instead of restarting at SW-1 for
+  // each new one. Same approach updateItemBadges() already uses for
+  // the "ITEM N" badge.
+  const liCodePos = container.querySelectorAll('.table-panel').length + 1;
   const div = document.createElement('div');
   div.className = 'table-panel';
   div.style.cssText = 'padding:16px;margin-bottom:16px;position:relative;';
@@ -500,10 +508,14 @@ function addLineItemUI() {
   div.innerHTML = `
     <div class="badge" style="position:absolute;top:-10px;left:16px;background:var(--accent-blue);color:var(--bg-dark);">ITEM ${totalItemsRendered}</div>
     ${removeBtnHtml}
-    <div style="display:grid;grid-template-columns:3fr 1fr 1fr;gap:10px;align-items:end;margin-top:10px;margin-bottom:8px;">
+    <div style="display:grid;grid-template-columns:2fr 1fr 1fr 1fr;gap:10px;align-items:end;margin-top:10px;margin-bottom:8px;">
       <div class="form-group">
         <label class="form-label">ITEM NAME *</label>
         <input class="form-input" type="text" id="itemName_${id}" placeholder="Name" style="font-size:12px;">
+      </div>
+      <div class="form-group">
+        <label class="form-label">LI CODE</label>
+        <input class="form-input" type="text" id="itemLiCode_${id}" value="SW-${liCodePos}" placeholder="SW-${liCodePos}" style="font-size:12px;">
       </div>
       <div class="form-group">
         <label class="form-label">PROCESSING DEPOT *</label>
@@ -669,6 +681,9 @@ async function submitSanction() {
       _processing_depot: document.getElementById(`itemProcDepot_${id}`)?.value || 'SBC',
       _consignee_depot: document.getElementById(`itemProcDepot_${id}`)?.value || 'SBC',
       _vetted_cost: _total,
+      // Can be duplicate, can be null — pre-filled with an incremental
+      // default (SW-1, SW-2, ...) but freely editable/overwritable.
+      li_code: (document.getElementById(`itemLiCode_${id}`)?.value || '').trim() || null,
     });
   });
 
@@ -695,6 +710,10 @@ async function submitSanction() {
     allocation_type: allocation,
     sanctioned_amount: totalCost,
     sanctioned_on: date || null,
+    // Now recorded as its own column. Left in remarks too (unchanged
+    // below) for backward visibility — remove that portion of the
+    // remarks concatenation if you'd rather not have it duplicated.
+    wid: wid || null,
     remarks: detail + (wid ? ` · WID: ${wid}` : '') + (date ? ` · Sanctioned: ${date}` : ''),
     state: 'Active',
     created_at: new Date().toISOString(),
@@ -1069,7 +1088,8 @@ function esRenderLineItems() {
 
     rows.push(`<tr style="${rowStyle}" data-li-id="${li.line_item_id}">
       <td class="pd-ro muted">${i + 1}</td>
-      <td class="pd-ro" style="font-weight:600;color:var(--text-primary);">${li.item_name || '—'}${sancBadge}</td>
+      <td class="pd-ro" style="font-weight:600;color:var(--text-primary);">${li.item_name || '—'}</td>
+      <td class="pd-ro muted">${li.li_code || '—'}</td>
       <td class="pd-ro muted">${li.unit || '—'}</td>
       <td class="pd-cell">${isEdit
         ? `<input class="pd-inp" type="number" step="0.01" value="${qty || ''}" style="width:80px;" data-es-edit="qty">`
@@ -1128,7 +1148,12 @@ function esSetAction(lineItemId, action) {
 
 function esUpdateEdit(lineItemId, field, value) {
   if (!ES.editValues[lineItemId]) ES.editValues[lineItemId] = {};
-  ES.editValues[lineItemId][field] = parseFloat(value) || 0;
+  // Fixed: this was blanket parseFloat-ing every data-es-edit field,
+  // including processing_depot's <select> — parseFloat('YPR') || 0
+  // silently corrupted any depot pick into the number 0, which then
+  // fell through to the wrong default on re-render/submit.
+  const NUMERIC_EDIT_FIELDS = new Set(['qty', 'base_price', 'tax_and_others']);
+  ES.editValues[lineItemId][field] = NUMERIC_EDIT_FIELDS.has(field) ? (parseFloat(value) || 0) : value;
 }
 
 // Live Estimate / Submitted On / Vetted On are always editable. Editing
@@ -1203,6 +1228,10 @@ document.getElementById('es_fill_all_estimate').addEventListener('change', (e) =
 function esAddNewLineItem() {
   ES.newItemSeq++;
   const seq = ES.newItemSeq;
+  // Default continues from the count of line items already under this
+  // sanction (existing + any other in-progress new rows), so it doesn't
+  // restart at SW-1 and collide with codes assigned at sanction creation.
+  const liCodePos = ES.lineItems.length + document.querySelectorAll('[data-es-new]').length + 1;
   const tbody = document.getElementById('es_items_body');
   const tr = document.createElement('tr');
   tr.id = `es_new_${seq}`;
@@ -1210,8 +1239,8 @@ function esAddNewLineItem() {
   tr.innerHTML = `
     <td class="pd-ro muted">NEW</td>
     <td class="pd-cell"><input class="pd-inp" type="text" id="es_ni_name_${seq}" placeholder="Item name *" style="min-width:160px;"></td>
+    <td class="pd-cell"><input class="pd-inp" type="text" id="es_ni_licode_${seq}" value="SW-${liCodePos}" placeholder="SW-${liCodePos}" style="width:80px;"></td>
     <td class="pd-cell"><input class="pd-inp" type="text" id="es_ni_unit_${seq}" list="unitOptions" placeholder="Unit" style="width:70px;"></td>
-    <td class="pd-cell"><input class="pd-inp" type="number" step="0.01" id="es_ni_qty_${seq}"  placeholder="0"    style="width:70px;" data-es-new-calc="${seq}"></td>
     <td class="pd-cell"><input class="pd-inp" type="number" step="0.01" id="es_ni_base_${seq}" placeholder="0.00" style="width:90px;" data-es-new-calc="${seq}"></td>
     <td class="pd-cell"><input class="pd-inp" type="number" step="0.01" id="es_ni_tax_${seq}"  placeholder="0.00" style="width:90px;" data-es-new-calc="${seq}"></td>
     <td class="pd-cell"><input class="pd-inp" type="number" id="es_ni_up_${seq}"    placeholder="0.00" style="width:80px;color:var(--accent-green);" readonly></td>
@@ -1427,6 +1456,9 @@ async function esSubmitChanges() {
       toInsert.push({
         sanction_id: ES.filtered.sanction_id,
         item_name: name,
+        // Can be duplicate, can be null — pre-filled incrementally but
+        // freely overwritable, same convention as New Sanction.
+        li_code: (document.getElementById(`es_ni_licode_${seq}`)?.value || '').trim() || null,
         unit: document.getElementById(`es_ni_unit_${seq}`)?.value || '',
         qty: parseFloat(document.getElementById(`es_ni_qty_${seq}`)?.value) || 0,
         base_price: parseFloat(document.getElementById(`es_ni_base_${seq}`)?.value) || 0,
@@ -1690,7 +1722,6 @@ async function gdFetchAllocationData() {
     gdRenderTable(allocTotals, totalCostAll);
     gdUpdateSummary(totalCostAll);
     gdUpdateTableTitle();
-    await gdPrefillSavedAmounts();
   } catch (e) {
     tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:12px;font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--accent-red);">ERROR: ${e.message}</td></tr>`;
     showToast('FETCH ERROR: ' + e.message.slice(0, 40), 'error');
@@ -1759,64 +1790,6 @@ function gdUpdateTableTitle() {
   const mode = GD.grantBy === 'under_power' ? 'UNDER POWER' : 'ITEM NAME';
   document.getElementById('gd_table_title').textContent = `GRANT ALLOCATION · ${mode}: ${GD.selectorVal} · PLAN HEAD ${GD.planHead}`;
 }
-
-// Looks up any already-saved grant_amount for the currently-loaded
-// rows, scoped to the currently-selected Grant Year + Grant Type, and
-// fills each row's input with it — so re-opening a combination that
-// was already recorded shows what's on file instead of a blank form.
-// Runs on initial fetch and again whenever Grant Year or Grant Type
-// changes (existing rows stay the same; only which saved cycle is
-// being looked at changes).
-async function gdPrefillSavedAmounts() {
-  if (!GD.rows.length) return;
-  const grantYear = document.getElementById('gd_grant_year').value;
-  const grantType = document.getElementById('gd_grant_type').value;
-  if (!grantYear || !grantType) return;
-
-  const cfg = getDbConfig();
-  if (!cfg?.nexus?.url || !cfg?.nexus?.key) return;
-
-  const lineItemIds = [...new Set(GD.rows.map(r => r.line_item_id).filter(Boolean))];
-  if (!lineItemIds.length) return;
-
-  try {
-    const existing = await nxFetch(
-      `sanction_grant_detail?line_item_id=in.(${lineItemIds.join(',')})` +
-      `&grant_year=eq.${encodeURIComponent(grantYear)}&grant_type=eq.${encodeURIComponent(grantType)}` +
-      `&select=line_item_id,grant_amount,grant_date&order=grant_date.desc`
-    );
-    // If more than one record somehow exists for the same line_item +
-    // year + type (shouldn't happen given the duplicate check on save,
-    // but data can predate that check), the most recent by grant_date
-    // wins — order=grant_date.desc above means the first one seen here
-    // per line_item_id is the one to keep.
-    const byLineItem = {};
-    (existing || []).forEach(g => {
-      if (!(g.line_item_id in byLineItem)) byLineItem[g.line_item_id] = g.grant_amount;
-    });
-
-    GD.rows.forEach(r => {
-      const inp = document.getElementById(r._rowKey + '_grant');
-      if (!inp) return;
-      const saved = byLineItem[r.line_item_id];
-      inp.value = (saved !== undefined && saved !== null) ? Number(saved).toFixed(2) : '';
-    });
-
-    gdOnGrantInput();
-  } catch (e) {
-    console.warn('[GD] Prefill saved amounts failed:', e.message);
-  }
-}
-
-function gdOnYearOrTypeChange() {
-  if (!GD.rows.length) return;
-  if (gdHasUnsavedChanges()) {
-    if (!confirm('⚠ Switching Grant Year/Type will refresh amounts from what\'s already saved for that combination, replacing anything typed here.\n\nContinue?')) return;
-  }
-  gdPrefillSavedAmounts();
-}
-document.getElementById('gd_grant_year').addEventListener('change', gdOnYearOrTypeChange);
-document.getElementById('gd_grant_type').addEventListener('change', gdOnYearOrTypeChange);
 
 function gdUpdateSummary(totalCostAll) {
   document.getElementById('gds_ph').textContent = GD.planHead || '—';
@@ -1891,16 +1864,10 @@ async function gdSaveToDatabase() {
   if (!GD.rows.length) { showToast('NO ROWS TO SAVE', 'error'); return; }
 
   const missing = GD.rows.some(r => {
-    const raw = document.getElementById(r._rowKey + '_grant')?.value;
-    // Zero is a legitimate grant amount (e.g. an item gets no funds this
-    // cycle) — only a genuinely blank field or a negative number should
-    // block save. Previously v<=0 rejected zero the same as blank,
-    // forcing a dummy non-zero value just to get past validation.
-    if (raw === undefined || raw === null || raw.trim() === '') return true;
-    const v = parseFloat(raw);
-    return isNaN(v) || v < 0;
+    const v = parseFloat(document.getElementById(r._rowKey + '_grant')?.value);
+    return isNaN(v) || v <= 0;
   });
-  if (missing) { showToast('FILL GRANT AMOUNT FOR ALL ROWS (0 IS ALLOWED)', 'error'); return; }
+  if (missing) { showToast('FILL GRANT AMOUNT FOR ALL ROWS', 'error'); return; }
 
   // One record per (line_item, allocation) — usually 1:1.
   const payloads = GD.rows.map(r => ({
@@ -2042,10 +2009,7 @@ async function gdDoUpsert(dbPayloads, toOverwrite) {
 function gdHasUnsavedChanges() {
   return (GD.rows || []).some(r => {
     const v = document.getElementById(r._rowKey + '_grant')?.value;
-    // A typed 0 is a real, deliberate entry now (see gdSaveToDatabase) —
-    // it must still count as "unsaved" so RESET warns before wiping it,
-    // not just values > 0.
-    return v !== undefined && v !== '' && !isNaN(parseFloat(v));
+    return v !== undefined && v !== '' && parseFloat(v) > 0;
   });
 }
 
@@ -3304,6 +3268,30 @@ function clToggleAttachment() {
 }
 document.getElementById('cl_has_attachment').addEventListener('change', clToggleAttachment);
 
+// Disables the "Has Attachment" checkbox and shows an inline explanation
+// whenever this session genuinely can't reach the NAS for file transfer
+// (see clAttachmentsAvailable() note above clBaseUrl()). Injected via JS
+// rather than a static HTML edit, and only once — safe to call repeatedly
+// on every Chronolog tab open.
+function clApplyAttachmentAvailability() {
+  const cb = document.getElementById('cl_has_attachment');
+  if (!cb) return;
+  const available = clAttachmentsAvailable();
+  cb.disabled = !available;
+  if (!available) cb.checked = false;
+
+  let note = document.getElementById('cl_attachment_unavailable_note');
+  if (!available && !note) {
+    note = document.createElement('div');
+    note.id = 'cl_attachment_unavailable_note';
+    note.style.cssText = 'font-family:"Share Tech Mono",monospace;font-size:9px;color:var(--text-muted);margin-top:4px;';
+    note.textContent = '⚠ Attachments unavailable this session — open the Shell via the NAS\'s direct address to attach or download files.';
+    cb.closest('.form-group')?.appendChild(note);
+  } else if (available && note) {
+    note.remove();
+  }
+}
+
 function clValidateFile(input) {
   const file = input.files[0];
   if (!file) return;
@@ -3320,6 +3308,41 @@ document.getElementById('cl_subject').addEventListener('input', (e) => {
   document.getElementById('cl_subject_count').textContent = '(' + e.target.value.length + '/50)';
 });
 
+// Chronolog's upload/download endpoint lives on the NAS itself, reached
+// two different ways depending on how the Shell is currently being
+// accessed:
+//   - Via the Cloudflare Worker (shell-dashboard.drgsbc.workers.dev,
+//     or any *.workers.dev host) — HTTPS, reachable from anywhere.
+//     Talking to the NAS directly over plain http:// from this origin
+//     would be blocked outright by the browser's mixed-content policy,
+//     so this MUST go through the matching HTTPS Tunnel-published route
+// Chronolog file attachments (upload + download) can only reach the NAS
+// when the Shell itself was loaded directly from the NAS's own address
+// (plain http://10.205.50.15:xxxx). When the Shell is loaded from the
+// Cloudflare Worker (any *.workers.dev host, HTTPS), the browser's
+// mixed-content policy blocks any http:// request to the NAS outright —
+// this is NOT about physical network location, it's about which URL
+// opened the Shell this session. There is currently no working HTTPS
+// route to the NAS's Chronolog endpoint (attempted via a Tunnel-
+// published-as-Worker route; confirmed non-functional), so rather than
+// let uploads/downloads silently fail, the UI disables them outright
+// with a clear explanation whenever attachments genuinely can't work
+// this session. Everything else in Chronolog (viewing history, and
+// recording note-only events with no attachment) is unaffected either
+// way, since those only ever talk to Supabase.
+function clAttachmentsAvailable() {
+  return !location.hostname.endsWith('.workers.dev');
+}
+function clBaseUrl() {
+  return 'http://10.205.50.15:8088';
+}
+// Must exactly match CHRONOLOG_ACCESS_TOKEN in chronolog-config.php on
+// the NAS — if you rotate one, rotate the other, or every
+// upload/download starts failing with 403. This is a casual-access
+// deterrent, not real security — see chronolog-config.php's own
+// comment for why.
+const CHRONOLOG_TOKEN = 'bb818f38347d5c4900608ff81d9a3ad2209a71a490683866';
+
 async function clRecordEvent() {
   const statusEl = document.getElementById('cl_entry_status');
   const path = CL.getPath();
@@ -3335,6 +3358,10 @@ async function clRecordEvent() {
   if (hasFile && (!fileInput.files || !fileInput.files[0])) {
     showToast('PLEASE SELECT A FILE OR UNCHECK ATTACHMENT', 'error'); return;
   }
+  if (hasFile && !clAttachmentsAvailable()) {
+    showToast('ATTACHMENTS NEED THE NAS DIRECT ADDRESS — SEE NOTE BELOW THE CHECKBOX', 'error');
+    return;
+  }
 
   statusEl.style.color = 'var(--text-muted)';
   statusEl.textContent = 'Recording event...';
@@ -3349,29 +3376,16 @@ async function clRecordEvent() {
       const formData = new FormData();
       formData.append('file', fileInput.files[0]);
       formData.append('path', path);
-      const uploadResp = await fetch('./chronolog-upload.php', { method: 'POST', body: formData });
-      // Read as text first, not .json() directly — if the endpoint is
-      // missing/misrouted, or the PHP script errors before it ever
-      // emits JSON, the response body is plain text (e.g. a bare web
-      // server 404 page, or an unencoded PHP error string). Calling
-      // .json() straight on that throws an opaque "Unexpected token"
-      // SyntaxError that hides what the server actually said. Parsing
-      // manually lets a non-JSON response surface as a real, readable
-      // error instead.
-      const rawText = await uploadResp.text();
-      let uploadResult;
-      try {
-        uploadResult = JSON.parse(rawText);
-      } catch (parseErr) {
-        throw new Error(`Server did not return JSON (HTTP ${uploadResp.status}): ${rawText.trim().slice(0, 150) || '(empty response)'}`);
-      }
+      formData.append('token', CHRONOLOG_TOKEN);
+      const uploadResp = await fetch(`${clBaseUrl()}/chronolog-upload.php`, { method: 'POST', body: formData });
+      const uploadResult = await uploadResp.json();
       if (!uploadResult.success) throw new Error(uploadResult.error || 'Upload failed');
       filePath = uploadResult.file_path;
       fileName = uploadResult.file_name;
       fileSize = uploadResult.file_size;
     } catch (e) {
       statusEl.style.color = 'var(--accent-red)';
-      statusEl.textContent = '✕ File upload failed: ' + e.message.slice(0, 150);
+      statusEl.textContent = '✕ File upload failed: ' + e.message.slice(0, 60);
       return;
     }
   }
@@ -3526,11 +3540,12 @@ async function clLoadHistory() {
         </div>
 
         <div style="display:flex;gap:6px;flex-shrink:0;">
-          ${ev.file_path ? `<button data-cl-action="download" data-file-path="${ev.file_path}" data-file-name="${ev.file_name || 'file'}"
-            style="background:transparent;border:1px solid var(--accent-warn);color:var(--accent-warn);
-            padding:4px 8px;border-radius:4px;cursor:pointer;font-family:'Share Tech Mono',monospace;font-size:9px;">
-            ↓ FILE
-          </button>` : ''}
+          ${ev.file_path ? `<button data-cl-action="preview" data-file-path="${ev.file_path}" data-file-name="${ev.file_name || 'file'}"
+              style="background:transparent;border:1px solid var(--accent-warn);color:var(--accent-warn);
+              padding:4px 8px;border-radius:4px;cursor:pointer;font-family:'Share Tech Mono',monospace;font-size:9px;"
+              title="${clAttachmentsAvailable() ? '' : 'May only load on LAN or with WARP connected'}">
+              ↓ FILE${clAttachmentsAvailable() ? '' : ' *'}
+            </button>` : ''}
           ${canEdit ? `<button data-cl-action="delete" data-chrono-id="${ev.chrono_id}"
             style="background:transparent;border:1px solid var(--accent-red);color:var(--accent-red);
             padding:4px 8px;border-radius:4px;cursor:pointer;font-family:'Share Tech Mono',monospace;font-size:9px;">
@@ -3550,7 +3565,7 @@ document.getElementById('cl_include_syslogs').addEventListener('change', clLoadH
 document.getElementById('cl_history_list').addEventListener('click', (e) => {
   const btn = e.target.closest('[data-cl-action]');
   if (!btn) return;
-  if (btn.dataset.clAction === 'download') clDownloadFile(btn.dataset.filePath, btn.dataset.fileName);
+  if (btn.dataset.clAction === 'preview') clShowFilePreviewModal(btn.dataset.filePath, btn.dataset.fileName);
   if (btn.dataset.clAction === 'delete') clDeleteEvent(btn.dataset.chronoId);
 });
 
@@ -3565,14 +3580,82 @@ async function clDeleteEvent(chronoId) {
   }
 }
 
+// Builds the token-gated URL for a Chronolog attachment. disposition
+// 'inline' lets the browser render PDFs/images directly (used inside
+// the preview modal below); 'attachment' forces a download regardless
+// of type (used by the modal's Download button, and by the direct
+// clDownloadFile() helper for anything that opens outside the modal).
+function clFileUrl(filePath, fileName, disposition) {
+  return `${clBaseUrl()}/chronolog-download.php?token=${encodeURIComponent(CHRONOLOG_TOKEN)}`
+    + `&path=${encodeURIComponent(filePath)}&name=${encodeURIComponent(fileName)}&disposition=${disposition}`;
+}
+
 function clDownloadFile(filePath, fileName) {
   const a = document.createElement('a');
-  a.href = 'http://10.205.50.15:8088/' + filePath;
+  a.href = clFileUrl(filePath, fileName, 'attachment');
   a.download = fileName;
   a.target = '_blank';
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
+}
+
+// Self-contained runtime modal (same pattern as gdShowOverwriteModal()
+// and the Sub-Items deactivate confirmation — injected via JS, no
+// static HTML needed) showing an inline PDF/image preview with a
+// Download button underneath. Anything else (doc/xls/csv) skips
+// straight to a "no preview available" message, since the browser
+// can't render those inline regardless of Content-Disposition.
+function clShowFilePreviewModal(filePath, fileName) {
+  const existing = document.getElementById('cl_preview_modal');
+  if (existing) existing.remove();
+
+  const ext = (fileName.split('.').pop() || '').toLowerCase();
+  const isPdf = ext === 'pdf';
+  const isImage = ['jpg', 'jpeg', 'png', 'gif'].includes(ext);
+  const inlineUrl = clFileUrl(filePath, fileName, 'inline');
+  const downloadUrl = clFileUrl(filePath, fileName, 'attachment');
+
+  let previewHtml;
+  if (isPdf) {
+    previewHtml = `<iframe src="${inlineUrl}" style="width:100%;height:70vh;border:1px solid var(--border);border-radius:6px;background:#fff;"></iframe>`;
+  } else if (isImage) {
+    previewHtml = `<img src="${inlineUrl}" style="max-width:100%;max-height:70vh;display:block;margin:0 auto;border-radius:6px;">`;
+  } else {
+    previewHtml = `<div style="text-align:center;padding:50px 20px;font-family:'Share Tech Mono',monospace;font-size:11px;color:var(--text-muted);">
+      No inline preview for .${ext.toUpperCase() || 'this'} files — use Download below.
+    </div>`;
+  }
+
+  const laneNote = clAttachmentsAvailable() ? '' : `
+    <div style="font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--accent-gold);margin-bottom:10px;">
+      ⚠ You're viewing the Shell via its public URL — this may only load if you're on the NAS network or connected via WARP.
+    </div>`;
+
+  const overlay = document.createElement('div');
+  overlay.id = 'cl_preview_modal';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(4,8,15,0.88);backdrop-filter:blur(6px);z-index:2000;display:flex;align-items:center;justify-content:center;';
+  overlay.innerHTML = `
+    <div style="background:var(--modal-bg);border:1px solid var(--border-accent);max-width:800px;width:95%;max-height:90vh;overflow-y:auto;padding:24px;position:relative;animation:modalin 0.25s ease;">
+      <div style="position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,var(--accent-blue),var(--accent-cyan));"></div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;gap:12px;">
+        <div style="font-family:Rajdhani,sans-serif;font-weight:700;font-size:15px;letter-spacing:1px;color:var(--accent-cyan);word-break:break-all;">${fileName}</div>
+        <button id="cl_preview_close_btn" style="background:transparent;border:none;color:var(--text-muted);cursor:pointer;font-size:18px;flex-shrink:0;">✕</button>
+      </div>
+      ${laneNote}
+      <div id="cl_preview_body">${previewHtml}</div>
+      <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:18px;padding-top:14px;border-top:1px solid var(--border);">
+        <a href="${downloadUrl}" download="${fileName}"
+          style="background:linear-gradient(135deg,var(--accent-blue),var(--accent-cyan));border:none;color:var(--bg-dark);
+          padding:8px 20px;border-radius:6px;cursor:pointer;text-decoration:none;display:inline-block;
+          font-family:Rajdhani,sans-serif;font-weight:700;font-size:12px;letter-spacing:2px;">
+          ⬇ DOWNLOAD
+        </a>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+  document.getElementById('cl_preview_close_btn').addEventListener('click', () => overlay.remove());
 }
 
 async function clOnTabOpen() {
@@ -3582,6 +3665,7 @@ async function clOnTabOpen() {
   const hasFileCb = document.getElementById('cl_has_attachment');
   if (hasFileCb) hasFileCb.checked = false;
   clToggleAttachment();
+  clApplyAttachmentAvailability();
 }
 
 /* ================================================================
@@ -3589,12 +3673,23 @@ async function clOnTabOpen() {
    same key v16 uses, so a preference set here would carry over if
    the same browser later opens v16 directly (and vice versa).
    ================================================================ */
-const PD_TOGGLE_COLS = ['remarks', 'stage', 'unitprice', 'depot', 'nextdue', 'ownersse', 'processpdc'];
+const PD_TOGGLE_COLS = ['remarks', 'stage', 'unitprice', 'depot', 'nextdue', 'ownersse', 'processpdc', 'manualpdc', 'pendingwith', 'status'];
 const PD_TOGGLE_GROUPS = {
   indent: ['indentno', 'indentdate', 'tendercalledon', 'tenderopenedon'],
   loapo:  ['vendorname', 'loaponumber', 'loapodate'],
   inward: ['deliverydate', 'commissioningdate', 'ptcdate', 'crnno', 'crndate'],
 };
+// Pending With used to be mandatory (always shown, no toggle at all).
+// Now that it's a genuine PD_TOGGLE_COLS entry, a person who's never
+// touched Column Settings must still see it by default — this is the
+// ONLY column whose absence of a saved preference means "visible", so
+// existing users don't lose it on first load after this change. Status
+// is a brand-new column with no prior "always shown" expectation, so
+// it defaults off like every other optional column.
+const PD_DEFAULT_VISIBLE_COLS = new Set(['pendingwith']);
+function pdColDefaultShow(col, prefs) {
+  return prefs.cols[col] !== undefined ? !!prefs.cols[col] : PD_DEFAULT_VISIBLE_COLS.has(col);
+}
 
 function pdLoadColumnPrefs() {
   try {
@@ -3613,7 +3708,7 @@ function pdApplyColumnVisibility() {
   // selects #pd_proc_table itself, not its descendants, causing the
   // entire table to vanish when that attribute's column is hidden.
   PD_TOGGLE_COLS.forEach(col => {
-    const show = !!prefs.cols[col];
+    const show = pdColDefaultShow(col, prefs);
     document.querySelectorAll(`#pd_proc_table [data-col="${col}"], #pd_bill_table [data-col="${col}"]`)
       .forEach(el => { el.style.display = show ? '' : 'none'; });
   });
@@ -3661,7 +3756,7 @@ function pdComputeFrozenOffsets(prefs) {
   let running = 0;
   const rules = [];
   PD_FROZEN_COLS.forEach(({ col, width, always }) => {
-    const visible = always || !!prefs.cols[col];
+    const visible = always || pdColDefaultShow(col, prefs);
     if (!visible) return;
     rules.push(`th[data-col="${col}"],td[data-col="${col}"]{position:sticky;left:${running}px;}`);
     running += width;
@@ -3672,7 +3767,7 @@ function pdComputeFrozenOffsets(prefs) {
 function pdSyncColumnPanel() {
   const prefs = pdLoadColumnPrefs();
   document.querySelectorAll('#pd_col_panel input[data-col]').forEach(cb => {
-    cb.checked = !!prefs.cols[cb.dataset.col];
+    cb.checked = pdColDefaultShow(cb.dataset.col, prefs);
   });
   document.querySelectorAll('#pd_col_panel input[data-grp]').forEach(cb => {
     cb.checked = !!prefs.grps[cb.dataset.grp];
@@ -3751,65 +3846,71 @@ function confirmIfDirty(hasDirtyFn, actionFn, label) {
 
 // Same 13-step date-driven waterfall as v16 — auto-derives
 // sanction_sub_item.status from the dates actually filled in.
+// Fixed: process_tat.trigger_field / .status are free-text columns
+// that were (re)entered manually post-recovery — a single stray
+// space or a casing difference (e.g. 'De_Vetted_On' vs 'de_vetted_on')
+// silently broke the exact-match property lookup below, with no
+// error, no way to notice, just a status tier that quietly never
+// fires. All comparisons in this function are now trim + case-
+// insensitive instead of assuming clean data.
+function pdNorm(s) { return String(s == null ? '' : s).trim().toLowerCase(); }
+
 function siCalcStatus(subItem, procDetail, billDetail) {
   // Terminal stages always override everything else
-  const ps = procDetail?.process_stage || '';
-  if (ps === 'Dropped') return 'Dropped';
-  if (ps === 'On Hold') return 'On Hold';
+  const ps = pdNorm(procDetail?.process_stage);
+  if (ps === pdNorm('Dropped')) return 'Dropped';
+  if (ps === pdNorm('On Hold')) return 'On Hold';
+
+  // Fixed: 'Work Completed' and 'Process Over' are the other two
+  // reference:'today()' manual-action stages in process_tat (same
+  // family as On Hold/Dropped above — a genuine action, not something
+  // derivable from an existing date). They were never special-cased,
+  // so picking either one silently never advanced status. Resolved
+  // dynamically from the live TAT cache rather than hardcoded, so this
+  // stays correct if process_tat's exact status text ever changes.
+  // Deliberately does NOT extend to ordinary 'log()'/'column:X' stages
+  // (e.g. Spec Finalization, Vendor/Bill details review) — those are
+  // same-tier working notes and are correctly status-invariant; only
+  // the reference:'today()' action stages get this treatment.
+  if (ps === pdNorm('Work Completed') || ps === pdNorm('Process Over')) {
+    const tatNow = _processTatCache || [];
+    // Prefer the canonical self-referential row (status text === stage
+    // text, e.g. status='Work Completed' & stage='Work Completed');
+    // fall back to any row with a matching stage (covers 'Process Over',
+    // which has no self-referential row — its status is 'Bill Passed').
+    const selfRef = tatNow.find(t => pdNorm(t.process_stage) === ps && pdNorm(t.status) === ps);
+    const anyMatch = selfRef || tatNow.find(t => pdNorm(t.process_stage) === ps);
+    if (anyMatch) return anyMatch.status;
+  }
 
   // TAT-driven: derive status from _processTatCache at runtime.
   // Change the process_tat table → status logic changes automatically.
   const tat = _processTatCache || [];
   if (tat.length) {
-    // Field resolver: looks up a trigger_field across all three data objects
-    const fieldVal = f =>
-      procDetail?.[f] || billDetail?.[f] || subItem?.[f] || '';
-
-    // Secondary condition evaluator — reads process_tat.trigger_condition
-    // (optional column, null = no extra condition = always passes).
-    // Supported formats:
-    //   contains:FINAL  → trigger_field value must contain 'FINAL' (case-insensitive)
-    //   equals:VALUE    → trigger_field value must equal 'VALUE' (case-insensitive)
-    // This lets a single TAT row require BOTH a filled date AND a specific
-    // text value on another field — e.g. co7_date filled AND bill_description
-    // contains 'FINAL' — without needing any hardcoded JS logic.
-    const meetsCondition = (tatRow) => {
-      const cond = tatRow.trigger_condition;
-      if (!cond) return true; // no condition = pass through
-      const colonIdx = cond.indexOf(':');
-      if (colonIdx < 0) return true;
-      const type  = cond.slice(0, colonIdx).trim().toLowerCase();
-      const value = cond.slice(colonIdx + 1).trim().toLowerCase();
-      // condition checks a SEPARATE field specified after '|', else re-checks trigger_field
-      // Format with explicit field: 'contains:FINAL|bill_description'
-      let checkField = tatRow.trigger_field;
-      let checkValue = value;
-      if (value.includes('|')) {
-        const [v, f]  = value.split('|');
-        checkValue    = v.trim();
-        checkField    = f.trim();
-      }
-      const fv = String(fieldVal(checkField) || '').toLowerCase();
-      if (type === 'contains') return fv.includes(checkValue);
-      if (type === 'equals')   return fv === checkValue;
-      if (type === 'notempty') return fv.length > 0;
-      if (type === 'empty')    return fv.length === 0;
-      return true;
-    };
+    // Flatten every known date field into one normalized-key lookup
+    // table, so trigger_field values from process_tat resolve
+    // correctly even if their casing/spacing doesn't exactly match
+    // the JS property names used elsewhere in this file.
+    const flat = {};
+    [procDetail, billDetail, subItem].forEach(obj => {
+      Object.entries(obj || {}).forEach(([k, v]) => { flat[pdNorm(k)] = v; });
+    });
+    const fieldVal = f => flat[pdNorm(f)] || '';
 
     // For each unique status (lowest priority row = the row whose trigger_field
     // unlocks that status), collect statuses whose trigger is filled.
     // The candidate with the lowest priority number = the most advanced milestone.
-    const terminals = new Set(['On Hold', 'Dropped']);
+    const terminals = new Set(['on hold', 'dropped']);
     const candidates = [];
     const seenStatus = new Set();
 
     // TAT is already ordered by priority.asc from pdGetTat()
     for (const row of tat) {
       const s = row.status;
-      if (!s || terminals.has(s) || seenStatus.has(s)) continue;
-      seenStatus.add(s);
-      if (fieldVal(row.trigger_field) && meetsCondition(row)) {
+      const sKey = pdNorm(s);
+      if (!s || terminals.has(sKey) || seenStatus.has(sKey)) continue;
+      seenStatus.add(sKey);
+      if (fieldVal(row.trigger_field)) {
         candidates.push({ status: s, priority: parseInt(row.priority, 10) });
       }
     }
@@ -3866,6 +3967,60 @@ async function pdGetTat() {
   return _processTatCache;
 }
 
+// Dynamically builds a status -> color map from whatever statuses
+// actually exist in process_tat right now — no hardcoded status list
+// to keep in sync by hand; change the table and the colors update
+// automatically, matching this codebase's TAT-driven philosophy
+// everywhere else. Ordered by each status's own lowest priority number
+// (lowest = most advanced, per this table's established convention —
+// see siCalcStatus()), so the gradient runs green (closest to
+// completion) toward red (earliest stage of the pipeline). On Hold /
+// Dropped are fixed exception colors, not part of the linear
+// progression — matching the same convention already used in the
+// Process Summary tab's STATUS_COLORS.
+let _statusColorMapCache = null;
+let _statusColorMapCacheSize = -1;
+function pdGetStatusColor(status) {
+  const tat = _processTatCache || [];
+  if (!_statusColorMapCache || _statusColorMapCacheSize !== tat.length) {
+    const rank = {}; // normalized status -> { label, priority }
+    tat.forEach(t => {
+      const norm = pdNorm(t.status);
+      if (!norm || norm === 'on hold' || norm === 'dropped') return;
+      const pr = parseInt(t.priority, 10) || 0;
+      if (!(norm in rank) || pr < rank[norm].priority) rank[norm] = { label: t.status, priority: pr };
+    });
+    const ordered = Object.values(rank).sort((a, b) => a.priority - b.priority); // most-advanced (green) first
+    const map = {};
+    const n = ordered.length;
+    ordered.forEach((entry, i) => {
+      const hue = n <= 1 ? 140 : 140 - (140 * (i / (n - 1))); // 140=green .. 0=red
+      map[pdNorm(entry.label)] = `hsl(${hue.toFixed(0)}, 62%, 55%)`;
+    });
+    map['on hold'] = '#ef4444';
+    map['dropped'] = '#6b7280';
+    _statusColorMapCache = map;
+    _statusColorMapCacheSize = tat.length;
+  }
+  return _statusColorMapCache[pdNorm(status)] || 'var(--text-muted)';
+}
+
+// Conditional formatting class for Next Process Due On: overdue (past),
+// due today, or due within the next 3 days. Anything further out gets
+// no special styling at all, per spec.
+function pdNdoClass(dateStr) {
+  if (!dateStr) return '';
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return '';
+  d.setHours(0, 0, 0, 0);
+  const diffDays = Math.round((d - today) / 86400000);
+  if (diffDays < 0) return 'ndo-overdue';
+  if (diffDays === 0) return 'ndo-today';
+  if (diffDays <= 3) return 'ndo-upcoming';
+  return '';
+}
+
 function pdDateClass(dateStr) {
   if (!dateStr) return '';
   const today = new Date().toISOString().split('T')[0];
@@ -3887,27 +4042,67 @@ function pdRecalcLatestCost(sid, row) {
   if (idx >= 0) PD.allRows[idx].latest_cost = parseFloat(row.vetted_cost) || 0;
 }
 
+// Shared schedule computation — given a resolved TAT row (the row that
+// defines the CURRENT stage's own trigger/tat_days/pending_with), works
+// out pending_with, process_pdc, and next_process_due_on. Used both by
+// the live dropdown-change preview (pdRecalcFromTat) and by pdSaveAll()'s
+// forced recompute after Resume/On Hold/Dropped resolve to a real stage —
+// one formula, so the two can never drift apart.
+function pdComputeSchedule(tat, stageRow, row) {
+  const todayStr = new Date().toISOString().split('T')[0];
+  const fieldName   = stageRow.trigger_field;
+  const isLog       = (stageRow.reference === 'log()' || stageRow.reference === 'today()');
+  const baseDate    = isLog ? todayStr : (row[fieldName] || todayStr);
+  const curSeq      = parseInt(stageRow.priority, 10);
+  const pendingWith = stageRow.pending_with || '—';
+
+  let totalTat = 0;
+  tat.filter(t => parseInt(t.priority, 10) >= curSeq && parseInt(t.priority, 10) <= 20)
+     .forEach(t => totalTat += (parseFloat(t.tat_days) || 0));
+  const processPdc = baseDate ? addDays(baseDate, totalTat) : '';
+
+  const nextRow = tat.find(t => parseInt(t.priority, 10) === curSeq + 1);
+  let nextDueOn = '';
+  if (nextRow) {
+    const nextIsLog    = (nextRow.reference === 'log()' || nextRow.reference === 'today()');
+    const nextBaseDate = nextIsLog ? todayStr : (row[nextRow.trigger_field] || baseDate);
+    nextDueOn = nextBaseDate ? addDays(nextBaseDate, parseFloat(nextRow.tat_days) || 0) : '';
+  }
+  return { pendingWith, processPdc, nextDueOn };
+}
+
 async function pdRecalcFromTat(sid, stageName) {
   const tat = await pdGetTat();
   if (!tat.length) return;
 
   const row = PD.allRows.find(r => String(r.sub_item_id) === String(sid));
   if (!row) return;
-  const idx           = PD.allRows.indexOf(row);
   const currentStatus = row.status || '';
 
   // Correct TAT lookup: match by process_stage AND current status.
   // Old code used t.status === stageName which was wrong — stageName is a
   // process_stage value. On Hold/Dropped/Resume appear under multiple status
   // groups so we scope to the sub-item's current status.
-  const stageRow = tat.find(t => t.process_stage === stageName && t.status === currentStatus);
+  // Fixed: normalized (trim + case-insensitive) — see pdNorm() note.
+  const stageRow = tat.find(t => pdNorm(t.process_stage) === pdNorm(stageName) && pdNorm(t.status) === pdNorm(currentStatus));
   if (!stageRow) return;
 
-  const todayStr = new Date().toISOString().split('T')[0];
-
-  // On Hold / Dropped: update local status immediately so stage dropdown rebuilds
-  if (stageName === 'On Hold' || stageName === 'Dropped') {
-    if (idx >= 0) PD.allRows[idx].status = stageName;
+  // On Hold / Dropped: rebuild the Stage dropdown immediately so Resume
+  // appears without waiting for a save round-trip.
+  // Fixed: this used to also set PD.allRows[idx].status = stageName
+  // right here, as a live-preview convenience. That was the actual bug
+  // behind "status doesn't persist to On Hold/Dropped" — it silently
+  // mutated row.status to the picked value BEFORE Save was ever clicked.
+  // By the time pdSaveAll() ran its newStatus !== row.status check, the
+  // in-memory row.status already (incorrectly) matched the picked value,
+  // so the check evaluated false and the real PATCH to sanction_sub_item
+  // was skipped entirely — leaving the database untouched while the UI
+  // looked correct, until a reload revealed the real (unwritten) DB
+  // value. row.status must stay at its last DB-CONFIRMED value until
+  // pdSaveAll() actually writes the new one — the dropdown rebuild below
+  // doesn't need the mutation anyway, since it already uses stageName
+  // directly for both the options list and the selected value.
+  if (pdNorm(stageName) === 'on hold' || pdNorm(stageName) === 'dropped') {
     const rowElT = document.querySelector(`[data-sid="${sid}"]`);
     if (rowElT) {
       rowElT.querySelectorAll('select[data-field="process_stage"]').forEach(sel => {
@@ -3918,31 +4113,22 @@ async function pdRecalcFromTat(sid, stageName) {
     // Fall through: TAT row gives pending_with = HQ-SWR
   }
 
-  // Resume: siCalcStatus will recalculate correct status from dates on save
-  if (stageName === 'Resume') {
-    showToast('RESUMING — STATUS WILL BE RECALCULATED FROM DATES ON SAVE');
+  // Resume: never a real destination state — its own TAT row's
+  // trigger_field/tat_days/pending_with describe the "resume" action
+  // itself, not the schedule of whatever status the item resumes into.
+  // Fixed: this used to fall through into the schedule computation
+  // below using literal Resume-row data anyway, silently writing wrong
+  // pending_with/process_pdc/next_process_due_on on save (status and
+  // process_stage were already being correctly recomputed fresh by
+  // pdSaveAll — these three were the ones left stale). Stop here;
+  // pdSaveAll() computes the real schedule once it knows the true
+  // resolved stage, after Save is clicked.
+  if (pdNorm(stageName) === 'resume') {
+    showToast('RESUMING — STATUS, STAGE & SCHEDULE WILL BE RECALCULATED FRESH ON SAVE');
+    return;
   }
 
-  const fieldName   = stageRow.trigger_field;
-  const isLog       = (stageRow.reference === 'log()' || stageRow.reference === 'today()');
-  const baseDate    = isLog ? todayStr : (row[fieldName] || todayStr);
-  const curSeq      = parseInt(stageRow.priority, 10);
-  const pendingWith = stageRow.pending_with || '—';
-
-  // process_pdc: baseDate + sum of TAT for stages priority 1..20 (terminal >20 excluded)
-  let totalTat = 0;
-  tat.filter(t => parseInt(t.priority,10) >= curSeq && parseInt(t.priority,10) <= 20)
-     .forEach(t => totalTat += (parseFloat(t.tat_days) || 0));
-  const processPdc = baseDate ? addDays(baseDate, totalTat) : '';
-
-  // next_process_due_on: next sequential priority's trigger field + its TAT
-  const nextRow = tat.find(t => parseInt(t.priority,10) === curSeq + 1);
-  let nextDueOn = '';
-  if (nextRow) {
-    const nextIsLog    = (nextRow.reference === 'log()' || nextRow.reference === 'today()');
-    const nextBaseDate = nextIsLog ? todayStr : (row[nextRow.trigger_field] || baseDate);
-    nextDueOn = nextBaseDate ? addDays(nextBaseDate, parseFloat(nextRow.tat_days) || 0) : '';
-  }
+  const { pendingWith, processPdc, nextDueOn } = pdComputeSchedule(tat, stageRow, row);
 
   // Update DOM spans immediately (live display before save)
   const rowEl = document.querySelector(`[data-sid="${sid}"]`);
@@ -3952,7 +4138,14 @@ async function pdRecalcFromTat(sid, stageName) {
     const ndoEl = rowEl.querySelector('.ms-ndo-calc');
     if (pwEl)  pwEl.textContent  = pendingWith;
     if (pdcEl) pdcEl.textContent = processPdc;
-    if (ndoEl) ndoEl.textContent = nextDueOn;
+    if (ndoEl) {
+      ndoEl.textContent = nextDueOn;
+      // Keep the overdue/today/upcoming highlight in sync with the
+      // freshly computed date too — otherwise the live preview shows
+      // the new date but a stale (or missing) highlight until the next
+      // full table re-render.
+      ndoEl.className = `pd-ro ms-ndo-calc ${pdNdoClass(nextDueOn)}`;
+    }
   }
 
   if (pendingWith) pdMarkDirty('proc', sid, 'pending_with',        pendingWith);
@@ -3967,12 +4160,18 @@ function pdBuildStageOptions(currentStatus, selectedStage) {
   const universal = ['On Hold', 'Dropped', 'Work Completed', 'Process Over'];
   const statusMap = { 'Indent Under Prep': 'Sanctioned' };
   const lookupStatus = statusMap[currentStatus] || currentStatus;
+  // Fixed: normalized comparisons — see pdNorm() note above siCalcStatus.
+  // A currentStatus value that's semantically 'On Hold' but stored with
+  // different casing/whitespace previously failed both this filter AND
+  // the isTerminal check below, silently falling through to the wrong
+  // (non-terminal) option set — e.g. showing Work Completed/Process
+  // Over instead of Resume while genuinely on hold.
   const statusStages = tat
-    .filter(t => t.status === lookupStatus)
+    .filter(t => pdNorm(t.status) === pdNorm(lookupStatus))
     .sort((a, b) => (a.priority || 0) - (b.priority || 0))
     .map(t => t.process_stage)
     .filter(Boolean);
-  const isTerminal = (currentStatus === 'Dropped' || currentStatus === 'On Hold');
+  const isTerminal = (pdNorm(currentStatus) === 'dropped' || pdNorm(currentStatus) === 'on hold');
   // Terminal statuses use only their own TAT rows:
   //   On Hold  → Resume, On Hold, Dropped  (TAT priorities 76-78)
   //   Dropped  → Resume, Dropped           (TAT priorities 79-80)
@@ -4018,6 +4217,8 @@ const PD = {
   dirtyProc: {}, // sub_item_id -> { field: value } of unsaved Procurement edits
   dirtyBill: {}, // sub_item_id -> { field: value } of unsaved Billing edits
   sharedScrollTop: 0, // vertical scroll position, carried over between Procurement <-> Billing
+  sortField: null, // Procurement grid column sort — e.g. 'indent_number', 'loa_po_number'
+  sortAsc: true,
 };
 
 const PD_FILTER_MAP = {
@@ -4033,6 +4234,18 @@ function pdOnTabOpen() {
   pdLoadFilterDropdowns();
   pdApplyColumnVisibility();
   pdApplyUserScope();
+  // Fixed: _processTatCache was only ever getting populated as a side
+  // effect of manually changing the Process Stage dropdown
+  // (pdRecalcFromTat -> pdGetTat). If a user only ever edited dates
+  // and never touched that dropdown directly, the cache stayed null
+  // for the whole session — which meant siCalcStatus() silently fell
+  // back to its non-TAT waterfall, AND pdSaveAll()'s auto-pick-stage
+  // block (`tat.filter(t => t.status === newStatus)...`) always saw an
+  // empty array and skipped entirely, so status updated on save but
+  // process_stage never followed it. Warm the cache eagerly here so
+  // both are correct regardless of which fields the user actually
+  // touches.
+  pdGetTat();
 }
 
 // Restrict & auto-set Plan Head / Processing Depot filters based on
@@ -4135,6 +4348,55 @@ async function pdSubItemAutoFill(inputVal) {
   } catch (e) {}
 }
 
+// Reads a row's current display value for a field, preferring any
+// unsaved edit staged in PD.dirtyProc over the last-saved DB value —
+// so sorting reflects what's actually on screen, not stale data.
+function pdLiveVal(row, field) {
+  const dirty = PD.dirtyProc[row.sub_item_id];
+  if (dirty && dirty[field] !== undefined && dirty[field] !== null) return dirty[field];
+  return row[field] || '';
+}
+
+// Sorts PD.filteredRows in place per the currently active PD.sortField/
+// sortAsc, without toggling or re-rendering — used both when a header
+// is clicked and to re-apply an already-active sort after the filter
+// set changes (FETCH SUB-ITEMS / filter dropdowns), so sort order
+// persists the way most people expect a spreadsheet-style sort to.
+function pdApplySortToFilteredRows() {
+  if (!PD.sortField) return;
+  const field = PD.sortField;
+  PD.filteredRows.sort((a, b) => {
+    const av = String(pdLiveVal(a, field)).trim();
+    const bv = String(pdLiveVal(b, field)).trim();
+    // Blanks always sink to the bottom regardless of direction, so an
+    // empty Indent/LOA-PO column doesn't dominate the top of the list.
+    if (!av && !bv) return 0;
+    if (!av) return 1;
+    if (!bv) return -1;
+    const cmp = av.localeCompare(bv, undefined, { numeric: true, sensitivity: 'base' });
+    return PD.sortAsc ? cmp : -cmp;
+  });
+}
+
+// Click handler for sortable Procurement grid headers (Indent/Demand No,
+// LOA/PO No — brought back after being lost in the recovery; wired
+// generically so any other <th data-sort-field="..."> can opt in the
+// same way). Clicking the same column again flips direction; clicking a
+// different column starts fresh at ascending.
+function pdSortProcBy(field) {
+  if (PD.sortField === field) PD.sortAsc = !PD.sortAsc;
+  else { PD.sortField = field; PD.sortAsc = true; }
+  pdApplySortToFilteredRows();
+  pdRenderProcTable();
+  document.querySelectorAll('.pd-sort-arrow').forEach(el => {
+    el.textContent = (PD.sortField === el.dataset.sortArrow) ? (PD.sortAsc ? ' ▲' : ' ▼') : '';
+  });
+}
+document.querySelectorAll('#pd_proc_table th[data-sort-field]').forEach(th => {
+  th.style.cursor = 'pointer';
+  th.addEventListener('click', () => pdSortProcBy(th.dataset.sortField));
+});
+
 function pdApplyFilters() {
   const ph  = document.getElementById('pd_f_planhead').value;
   const dep = document.getElementById('pd_f_depot').value;
@@ -4163,6 +4425,7 @@ function pdApplyFilters() {
     if (pw  !== 'ALL' && r.pending_with      !== pw)  return false;
     return true;
   });
+  pdApplySortToFilteredRows(); // re-apply an already-active sort after the filter set changes
 
   document.getElementById('pd_row_count').textContent = PD.filteredRows.length;
   if (PD.activeSubTab === 'summary_sub') { pdRenderSummary(); pdRenderSummaryExtras(); }
@@ -4225,12 +4488,16 @@ async function pdFetchData() {
       // Matches the actual schema: sanction_sub_item -> sanction_line_item ->
       // sanction_header, plus process_detail (1:1) and bill_detail (1:many).
       let url = 'sanction_sub_item?select=' +
-        'sub_item_id,sub_item_name,consignee_depot,processing_depot,qty,unit_price,vetted_cost,total_value,status,under_power,state,remarks,latest_grant,' +
+        // Fixed: de_submit_date/de_vetted_on were never selected here,
+        // so pdSaveAll()'s status/stage recalculation always read them
+        // as undefined off PD.allRows — any process_tat tier keyed to
+        // either trigger field could never be detected as reached.
+        'sub_item_id,sub_item_name,consignee_depot,processing_depot,qty,unit_price,vetted_cost,total_value,status,under_power,state,remarks,latest_grant,de_submit_date,de_vetted_on,' +
         'sanction_line_item!inner(' +
           'line_item_id,item_name,item_description,unit,department,' +
           'sanction_header!inner(sanction_id,under_power,plan_head,allocation_type,sanction_year,sanctioned_on)' +
         '),' +
-        'process_detail(process_id,process_stage,process_pdc,next_process_due_on,pending_with,owner_sse,vendor_name,' +
+        'process_detail(process_id,process_stage,process_pdc,manual_pdc,next_process_due_on,pending_with,owner_sse,vendor_name,' +
           'indent_number,indent_date,tender_called_on,tender_opened_on,loa_po_number,loa_po_date,' +
           'delivery_due_on,delivery_date,crn_number,crn_date,' +
           'commissioning_date,ptc_date,total_bills,remarks),' +
@@ -4286,6 +4553,10 @@ async function pdFetchData() {
         status:           r.status || '',
         sub_item_state:   r.state || '',
         latest_cost:      r.vetted_cost || 0,
+        // Fixed: mapped from the newly-selected sanction_sub_item
+        // columns above — see the note there.
+        de_submit_date:   r.de_submit_date || '',
+        de_vetted_on:     r.de_vetted_on   || '',
         process_stage:    p.process_stage || '',
         next_process_due_on: p.next_process_due_on || '',
         remarks:          p.remarks || r.remarks || '',
@@ -4306,6 +4577,7 @@ async function pdFetchData() {
         ptc_date:               p.ptc_date || '',
         total_bills:          p.total_bills || 0,
         process_pdc:          p.process_pdc || '',
+        manual_pdc:           p.manual_pdc || '',
         owner_sse:            p.owner_sse || '',
         vendor_name:          p.vendor_name || '',
         bill_id:          bd.bill_id || null,
@@ -4619,6 +4891,23 @@ function pdIsBillReleased(b) { return !pdIsBillRejected(b) && !!(b.co7_number &&
 // "Final" if released AND its description contains "final" (case-insensitive).
 function pdIsBillFinal(b) { return pdIsBillReleased(b) && !!(b.bill_description && /final/i.test(b.bill_description)); }
 
+// Manual PDC — displayed default is process_pdc or the final bill's
+// payment_date, whichever is EARLIER. Genuinely stored manual_pdc
+// (once a person actually overrides it) always takes priority — these
+// two helpers are only ever consulted when process_detail.manual_pdc
+// is still null, i.e. nobody has overridden it yet.
+function pdFindFinalBillPaymentDate(subItemId) {
+  const bills = PD.existBill[subItemId] || [];
+  const finalBill = bills.find(b => pdIsBillFinal(b));
+  return finalBill?.payment_date || '';
+}
+function pdComputeManualPdcDefault(row) {
+  const processPdc = row.process_pdc || '';
+  const finalPay = pdFindFinalBillPaymentDate(row.sub_item_id);
+  if (processPdc && finalPay) return (processPdc < finalPay) ? processPdc : finalPay;
+  return processPdc || finalPay || '';
+}
+
 function pdFormatDateDMY(isoDate) {
   if (!isoDate) return '—';
   const parts = String(isoDate).split('-');
@@ -4678,18 +4967,22 @@ function pdRenderProcTable() {
       </td>
       <td class="pd-ro muted pd-frozen" data-col="qty">${r.qty || '—'}</td>
       <td class="pd-ro pd-frozen" style="color:var(--accent-gold);" data-col="latestcost">${r.latest_cost ? 'Rs.' + Number(r.latest_cost).toLocaleString('en-IN') : '—'}</td>
-      <td class="pd-cell edit pd-col pd-frozen" data-col="remarks"><input class="pd-inp${dc('remarks')}" type="text" data-sid="${sid}" data-field="remarks" value="${v('remarks')}" placeholder="Add remarks..."></td>
+      <td class="pd-cell edit pd-col pd-frozen" data-col="remarks"><input class="pd-inp${dc('remarks')}" type="text" data-sid="${sid}" data-field="remarks" value="${v('remarks')}" placeholder="Add remarks..." title="${pdEscAttr(v('remarks'))}"></td>
       <td class="pd-cell edit pd-col pd-frozen" data-col="stage">
         <select class="pd-inp f-select" data-sid="${sid}" data-field="process_stage" style="font-size:10px;">
           ${pdBuildStageOptions(r.status, v('process_stage'))}
         </select>
       </td>
+      <td class="pd-ro pd-col" data-col="status"><span class="badge" style="background:${pdGetStatusColor(r.status)}22;color:${pdGetStatusColor(r.status)};border:1px solid ${pdGetStatusColor(r.status)}55;">${r.status || '—'}</span></td>
       <td class="pd-ro muted pd-col pd-frozen" data-col="unitprice">${r.unit_price ? 'Rs.' + Number(r.unit_price).toLocaleString('en-IN') : '—'}</td>
-      <td class="pd-ro muted pd-col pd-frozen" data-col="depot">${r.processing_depot || '—'}</td>
-      <td class="pd-cell pd-col pd-frozen" data-col="nextdue" title="Auto-calculated: field date + next stage TAT"><span class="pd-ro ms-ndo-calc" style="color:var(--accent-green);font-family:'Share Tech Mono',monospace;font-size:9px;">${r.next_process_due_on || '—'}</span></td>
+      <td class="pd-ro muted pd-col pd-frozen" data-col="depot">${r.consignee_depot || '—'}</td>
+      <td class="pd-cell pd-col pd-frozen" data-col="nextdue" title="Auto-calculated: field date + next stage TAT"><span class="pd-ro ms-ndo-calc ${pdNdoClass(r.next_process_due_on)}" style="color:var(--accent-green);font-family:'Share Tech Mono',monospace;font-size:9px;">${r.next_process_due_on || '—'}</span></td>
       <td class="pd-ro muted pd-col pd-frozen" data-col="ownersse">${r.owner_sse || '—'}</td>
       <td class="pd-cell pd-col pd-frozen" data-col="processpdc" title="Auto-calculated: field date + remaining TAT"><span class="pd-ro ms-pdc-calc ${pdDateClass(r.process_pdc)}" style="color:var(--accent-cyan);font-family:'Share Tech Mono',monospace;font-size:9px;">${r.process_pdc || '—'}</span></td>
       <td class="pd-cell" data-col="pendingwith"><span class="pd-ro ms-pw-calc" style="color:var(--accent-gold);font-family:'Share Tech Mono',monospace;font-size:9px;">${r.pending_with || '—'}</span></td>
+      <td class="pd-cell edit pd-col" data-col="manualpdc" title="Defaults to Process PDC or the final bill's payment date, whichever is earlier — override with any date if needed">
+        <input class="pd-inp${dc('manual_pdc')}" type="date" data-sid="${sid}" data-field="manual_pdc" value="${dirty.manual_pdc !== undefined ? dirty.manual_pdc : (r.manual_pdc || pdComputeManualPdcDefault(r))}">
+      </td>
       <td class="pd-cell edit pd-grp" data-grp="indent" data-col="indentno">
         <div class="pd-loapo-wrap">
           <input class="pd-inp${dc('indent_number')}" type="text" data-sid="${sid}" data-field="indent_number" value="${v('indent_number')}" placeholder="—">
@@ -4716,6 +5009,10 @@ function pdRenderProcTable() {
   }).join('');
   pdApplyColumnVisibility();
 }
+
+document.getElementById('pd_proc_body').addEventListener('input', (e) => {
+  if (e.target.dataset.field === 'remarks') e.target.title = e.target.value;
+});
 
 // Fields that go through the date-sequence-aware path (pdCheckDateLive)
 // rather than the plain pdMarkDirty path. indent_date and tender_opened_on
@@ -4795,6 +5092,101 @@ function pdHandleProcFieldChange(el, sid, field) {
    automatically (see core/services.js). Blocked entirely if any
    pending change fails date-sequence validation.
    ================================================================ */
+// Recomputes and writes status + process_stage + schedule (pending_with
+// / process_pdc / next_process_due_on) for ONE sub-item, from whatever
+// is currently true in the database. Shared by pdSaveAll() (after a
+// Process-tab save) AND by the Billing modal's save/reject flows — this
+// used to live ONLY inside pdSaveAll(), so recording, editing, or
+// rejecting a bill (e.g. adding a CO6 number/date) never triggered a
+// status/stage update at all, even though the Process tab's own save
+// button did. That's why these fields kept drifting until someone ran
+// the data-repair tool — the bill-save code path simply never called
+// into this logic in the first place.
+//
+// Always re-fetches the latest bill fresh from the DB rather than
+// trusting row.co6_date/co7_date/bill_description off PD.allRows —
+// those are only populated by a full pdFetchData() re-fetch and are
+// NOT updated live when a bill is saved through the modal, so trusting
+// them here would risk computing status from a stale bill even when
+// called right after a fresh save.
+async function pdRecalcStatusAndStageForSubItem(subItemId) {
+  const row = PD.allRows.find(r => String(r.sub_item_id) === String(subItemId));
+  if (!row) return;
+  try {
+    await pdGetTat();
+
+    let billDetail = { co6_date: '', co7_date: '', bill_description: '' };
+    try {
+      // Fetch a small recent batch rather than just limit=1, so a
+      // rejected bill (which must never drive status forward) doesn't
+      // shadow the actual latest valid one — same pdIsBillRejected()
+      // check already used everywhere else in this file for consistency.
+      const bills = await nxFetch(
+        `bill_detail?sub_item_id=eq.${subItemId}&select=co6_date,co7_date,bill_description,bill_status&order=created_at.desc&limit=5`
+      );
+      const latestValid = Array.isArray(bills) ? bills.find(b => !pdIsBillRejected(b)) : null;
+      if (latestValid) {
+        billDetail = {
+          co6_date: latestValid.co6_date || '',
+          co7_date: latestValid.co7_date || '',
+          bill_description: latestValid.bill_description || '',
+        };
+      }
+    } catch (e) {
+      console.warn('[DRGSBC] Could not fetch latest bill for status recalc, sub_item_id=' + subItemId, e.message);
+    }
+
+    const subItem = { sanctioned_on: row.sanctioned_on, de_submit_date: row.de_submit_date, de_vetted_on: row.de_vetted_on };
+    const procDetail = {
+      process_stage:    row.process_stage,
+      indent_date:      row.indent_date,
+      tender_called_on: row.tender_called_on,
+      tender_opened_on: row.tender_opened_on,
+      loa_po_date:      row.loa_po_date,
+      delivery_date:    row.delivery_date,
+      crn_date:         row.crn_date,
+    };
+
+    const wasResume = pdNorm(row.process_stage) === 'resume';
+    const newStatus = siCalcStatus(subItem, procDetail, billDetail);
+    const statusChanged = !!newStatus && pdNorm(newStatus) !== pdNorm(row.status);
+
+    if (statusChanged) {
+      await nxFetch(`sanction_sub_item?sub_item_id=eq.${subItemId}`,
+        { method: 'PATCH', body: { status: newStatus, updated_at: new Date().toISOString() }, prefer: 'return=representation' });
+      row.status = newStatus;
+    }
+
+    if (newStatus && (statusChanged || wasResume)) {
+      const tat = _processTatCache || [];
+      const autoStageRow = tat.filter(t => pdNorm(t.status) === pdNorm(newStatus)).sort((a, b) => (a.priority || 0) - (b.priority || 0))[0];
+      if (autoStageRow?.process_stage) {
+        const autoStage = autoStageRow.process_stage;
+        const sched = pdComputeSchedule(tat, autoStageRow, row);
+        await nxFetch(`process_detail?sub_item_id=eq.${subItemId}`, {
+          method: 'PATCH',
+          body: {
+            process_stage: autoStage,
+            pending_with: sched.pendingWith,
+            process_pdc: sched.processPdc || null,
+            next_process_due_on: sched.nextDueOn || null,
+            updated_at: new Date().toISOString(),
+          },
+          prefer: 'return=representation',
+        });
+        row.process_stage = autoStage;
+        row.pending_with = sched.pendingWith;
+        row.process_pdc = sched.processPdc;
+        row.next_process_due_on = sched.nextDueOn;
+      } else if (wasResume) {
+        console.warn('[DRGSBC] Resume could not resolve to a stage — no process_tat row found for status:', newStatus, 'sub_item_id:', subItemId);
+      }
+    }
+  } catch (e) {
+    console.warn('[DRGSBC] status/stage recalc failed for sub_item_id=' + subItemId, e.message);
+  }
+}
+
 async function pdSaveAll() {
   const hasDirtyProc = Object.keys(PD.dirtyProc).length > 0;
   const hasDirtyBill = Object.keys(PD.dirtyBill).length > 0;
@@ -4914,7 +5306,12 @@ async function pdSaveAll() {
           await nxFetch(`process_detail?process_id=eq.${existing.process_id}`,
             { method: 'PATCH', body: { ...changes, updated_at: new Date().toISOString() }, prefer: 'return=representation' });
         } else {
-          const row = PD.allRows.find(r => r.sub_item_id === subItemId);
+          // Fixed: subItemId (an Object.keys() key) is always a string;
+          // r.sub_item_id (from the API) is a number. Strict === between
+          // them was always false, so this lookup silently never found
+          // the row — every reference below it (row?.owner_sse, etc.)
+          // was reading from `undefined`.
+          const row = PD.allRows.find(r => String(r.sub_item_id) === String(subItemId));
           const today = new Date().toISOString().slice(0, 10);
           const payload = {
             sub_item_id: subItemId,
@@ -4930,10 +5327,19 @@ async function pdSaveAll() {
           const created = await nxFetch('process_detail', { method: 'POST', body: payload, prefer: 'return=representation' });
           const createdRow = Array.isArray(created) ? created[0] : created;
           PD.existProc[subItemId] = createdRow;
-          const idx0 = PD.allRows.findIndex(r => r.sub_item_id === subItemId);
+          const idx0 = PD.allRows.findIndex(r => String(r.sub_item_id) === String(subItemId));
           if (idx0 >= 0) { Object.assign(PD.allRows[idx0], changes); PD.allRows[idx0].process_id = createdRow.process_id; }
         }
-        const idx = PD.allRows.findIndex(r => r.sub_item_id === subItemId);
+        // Fixed: THE core bug behind "status never updates after a Stage
+        // change" — this lookup used unstringified strict equality
+        // (number !== string, always false), so it silently never found
+        // the row, meaning the just-written process_stage (and every
+        // other dirty field) was never synced into PD.allRows. The DB
+        // write itself succeeded — only this in-memory cache-sync step
+        // failed — so the very next block (status recalculation) read
+        // row.process_stage as whatever it was BEFORE this edit, never
+        // detecting that anything needed to change.
+        const idx = PD.allRows.findIndex(r => String(r.sub_item_id) === String(subItemId));
         if (idx >= 0) Object.assign(PD.allRows[idx], changes);
         Object.keys(changes).forEach(f => {
           const el = document.querySelector(`[data-field='${f}'][data-sid='${subItemId}']`);
@@ -4967,7 +5373,11 @@ async function pdSaveAll() {
           const createdBillRow = Array.isArray(createdBill) ? createdBill[0] : createdBill;
           PD.existBill[subItemId] = [createdBillRow];
         }
-        const idx = PD.allRows.findIndex(r => r.sub_item_id === subItemId);
+        // Fixed: same type-mismatched equality bug as the Procurement
+        // loop above (subItemId is a string key, r.sub_item_id is a
+        // number) — this cache-sync silently never ran, so Billing
+        // fields never made it into PD.allRows after a successful save.
+        const idx = PD.allRows.findIndex(r => String(r.sub_item_id) === String(subItemId));
         if (idx >= 0) Object.assign(PD.allRows[idx], changes);
         Object.keys(changes).forEach(f => {
           const el = document.querySelector(`[data-field='${f}'][data-sid='${subItemId}']`);
@@ -4986,42 +5396,12 @@ async function pdSaveAll() {
     const errTotal = procErr + billErr;
     if (errTotal === 0) {
       // Auto-derive and save sanction_sub_item.status from the dates
-      // just written, same as v16.
+      // just written, same as v16 — now via the shared helper above,
+      // so this and the Billing modal's save/reject flows can never
+      // drift apart again.
       const savedSubIds = new Set([...Object.keys(PD.dirtyProc), ...Object.keys(PD.dirtyBill)]);
       for (const subItemId of savedSubIds) {
-        try {
-          const row = PD.allRows.find(r => String(r.sub_item_id) === String(subItemId));
-          if (!row) continue;
-          const subItem = { sanctioned_on: row.sanctioned_on };
-          const procDetail = {
-            process_stage:    row.process_stage,
-            indent_date:      row.indent_date,
-            tender_called_on: row.tender_called_on,
-            tender_opened_on: row.tender_opened_on,
-            loa_po_date:      row.loa_po_date,
-            delivery_date:    row.delivery_date,
-            de_submit_date:   row.de_submit_date,
-            de_vetted_on:     row.de_vetted_on,
-            crn_date:         row.crn_date,
-          };
-          const billDetail = { co6_date: row.co6_date, co7_date: row.co7_date, bill_description: row.bill_description };
-          const newStatus = siCalcStatus(subItem, procDetail, billDetail);
-          if (newStatus && newStatus !== row.status) {
-            await nxFetch(`sanction_sub_item?sub_item_id=eq.${subItemId}`,
-              { method: 'PATCH', body: { status: newStatus, updated_at: new Date().toISOString() }, prefer: 'return=representation' });
-            row.status = newStatus;
-            const tat = _processTatCache || [];
-            const autoStageRow = tat.filter(t => t.status === newStatus).sort((a, b) => (a.priority || 0) - (b.priority || 0))[0];
-            if (autoStageRow?.process_stage) {
-              const autoStage = autoStageRow.process_stage;
-              await nxFetch(`process_detail?sub_item_id=eq.${subItemId}`,
-                { method: 'PATCH', body: { process_stage: autoStage, updated_at: new Date().toISOString() }, prefer: 'return=representation' });
-              row.process_stage = autoStage;
-            }
-          }
-        } catch (e) {
-          console.warn('[DRGSBC] status update failed for sub_item_id=' + subItemId, e.message);
-        }
+        await pdRecalcStatusAndStageForSubItem(subItemId);
       }
 
       msgEl.style.color = 'var(--accent-green)';
@@ -5102,15 +5482,16 @@ function pdRenderBillTable() {
       </td>
       <td class="pd-ro muted pd-frozen" data-col="qty">${r.qty || '—'}</td>
       <td class="pd-ro pd-frozen" style="color:var(--accent-gold);" data-col="latestcost">${r.latest_cost ? 'Rs.' + Number(r.latest_cost).toLocaleString('en-IN') : '—'}</td>
-      <td class="pd-cell edit pd-col pd-frozen" data-col="remarks"><input class="pd-inp${dc('remarks')}" type="text" data-sid="${sid}" data-field="remarks" value="${v('remarks')}" placeholder="Add remarks..."></td>
+      <td class="pd-cell edit pd-col pd-frozen" data-col="remarks"><input class="pd-inp${dc('remarks')}" type="text" data-sid="${sid}" data-field="remarks" value="${v('remarks')}" placeholder="Add remarks..." title="${pdEscAttr(v('remarks'))}"></td>
       <td class="pd-cell edit pd-col pd-frozen" data-col="stage">
         <select class="pd-inp f-select" data-sid="${sid}" data-field="process_stage" style="font-size:10px;">
           ${pdBuildStageOptions(r.status, v('process_stage'))}
         </select>
       </td>
+      <td class="pd-ro pd-col" data-col="status"><span class="badge" style="background:${pdGetStatusColor(r.status)}22;color:${pdGetStatusColor(r.status)};border:1px solid ${pdGetStatusColor(r.status)}55;">${r.status || '—'}</span></td>
       <td class="pd-ro muted pd-col pd-frozen" data-col="unitprice">${r.unit_price ? 'Rs.' + Number(r.unit_price).toLocaleString('en-IN') : '—'}</td>
       <td class="pd-ro muted pd-col pd-frozen" data-col="depot">${r.processing_depot || '—'}</td>
-      <td class="pd-cell pd-col pd-frozen" data-col="nextdue" title="Auto-calculated: field date + next stage TAT"><span class="pd-ro ms-ndo-calc" style="color:var(--accent-green);font-family:'Share Tech Mono',monospace;font-size:9px;">${r.next_process_due_on || '—'}</span></td>
+      <td class="pd-cell pd-col pd-frozen" data-col="nextdue" title="Auto-calculated: field date + next stage TAT"><span class="pd-ro ms-ndo-calc ${pdNdoClass(r.next_process_due_on)}" style="color:var(--accent-green);font-family:'Share Tech Mono',monospace;font-size:9px;">${r.next_process_due_on || '—'}</span></td>
       <td class="pd-ro muted pd-col pd-frozen" data-col="ownersse">${r.owner_sse || '—'}</td>
       <td class="pd-cell pd-col pd-frozen" data-col="processpdc" title="Auto-calculated: field date + remaining TAT"><span class="pd-ro ms-pdc-calc ${pdDateClass(r.process_pdc)}" style="color:var(--accent-cyan);font-family:'Share Tech Mono',monospace;font-size:9px;">${r.process_pdc || '—'}</span></td>
       <td class="pd-cell" data-col="pendingwith"><span class="pd-ro ms-pw-calc" style="color:var(--accent-gold);font-family:'Share Tech Mono',monospace;font-size:9px;">${r.pending_with || '—'}</span></td>
@@ -5138,6 +5519,10 @@ function pdRenderBillTable() {
   pdApplyColumnVisibility();
   pdStyleDateInputs(document.getElementById('pd_tab_billing'));
 }
+
+document.getElementById('pd_bill_body').addEventListener('input', (e) => {
+  if (e.target.dataset.field === 'remarks') e.target.title = e.target.value;
+});
 
 // Sets "+ NEW BILL" enabled/disabled + total_bills display from
 // already-loaded PD.existBill — no extra fetch needed.
@@ -5368,6 +5753,15 @@ async function pdSaveNewBill() {
     }
 
     await pdUpdateTotalBills(sid);
+    // Fixed: this bill save could easily change what status/stage the
+    // sub-item should be in (e.g. adding a CO6 number/date should move
+    // it toward 'Bill Submitted', CO7 + 'final' description toward
+    // 'Bill Passed') — but nothing on this save path ever triggered
+    // that recalculation before, only the Process tab's own Save All
+    // did. That's why these fields kept drifting until someone ran the
+    // data-repair tool. pdFetchData() below will re-pull the fresh
+    // values this writes.
+    await pdRecalcStatusAndStageForSubItem(sid);
 
     statusEl.style.color = 'var(--accent-green)';
     statusEl.textContent = isEdit ? '✓ Bill updated successfully' : '✓ Bill saved successfully';
@@ -5413,6 +5807,11 @@ async function pdRejectBillRow(billId) {
 
     showToast('BILL REJECTED');
     await pdUpdateTotalBills(b.sub_item_id);
+    // Rejecting a bill can also change the correct status (e.g. if the
+    // rejected bill's CO7 date was the only thing keeping status at
+    // 'Bill Passed', it should fall back once that bill no longer
+    // counts) — same fix as pdSaveNewBill() above.
+    await pdRecalcStatusAndStageForSubItem(b.sub_item_id);
 
     const row = PD.allRows.find(r => String(r.sub_item_id) === String(b.sub_item_id));
     await pdViewAllBills(b.sub_item_id, row?.sub_item_name || '');
@@ -5524,9 +5923,14 @@ function pdRenderSummary() {
   const total = rows.length;
   const today = new Date().toISOString().split('T')[0];
 
-  const active  = rows.filter(r => r.status !== 'Dropped' && r.status !== 'On Hold').length;
-  const onHold  = rows.filter(r => r.status === 'On Hold').length;
-  const dropped = rows.filter(r => r.status === 'Dropped').length;
+  // Fixed: normalized (trim + case-insensitive) — same pdNorm()
+  // treatment already applied to every other status comparison in this
+  // file. Recovered/manually-entered status text with stray casing or
+  // whitespace previously miscounted here (e.g. an item genuinely on
+  // hold could be silently counted as "active").
+  const active  = rows.filter(r => pdNorm(r.status) !== 'dropped' && pdNorm(r.status) !== 'on hold').length;
+  const onHold  = rows.filter(r => pdNorm(r.status) === 'on hold').length;
+  const dropped = rows.filter(r => pdNorm(r.status) === 'dropped').length;
   const overdue = rows.filter(r => r.next_process_due_on && r.next_process_due_on < today).length;
 
   const bannerEl = document.getElementById('summ_banner');
@@ -5575,10 +5979,29 @@ function pdRenderSummary() {
     'CRN Generated': '#06b6d4', 'Bill Submitted': '#3b82f6', 'Bill Passed': '#22c55e',
     'On Hold': '#ef4444', 'Dropped': '#6b7280', 'Process Over': '#14b8a6', 'Work Completed': '#84cc16',
   };
-  const statusCounts = {};
-  rows.forEach(r => { const s = r.status || 'Unknown'; statusCounts[s] = (statusCounts[s] || 0) + 1; });
-  const statusSegs = Object.entries(statusCounts).sort((a, b) => b[1] - a[1])
-    .map(([s, c]) => ({ label: s, count: c, color: STATUS_COLORS[s] || 'var(--text-muted)' }));
+  // Fixed: grouping/color lookup below used to key off the raw status
+  // text verbatim — a status stored with different casing/whitespace
+  // than the dictionary above (recovered/manually-entered data) fell
+  // through to the grey "unknown" bucket AND, worse, appeared as its
+  // own separate near-duplicate bar segment instead of merging with
+  // the real one. pdGroupByNormalized() below groups by the pdNorm()
+  // key but displays/colors using the color map's own canonical
+  // spelling whenever a normalized match is found.
+  function pdGroupByNormalized(rows, getField, colorMap, fallbackLabel) {
+    const normToCanonical = {};
+    Object.keys(colorMap).forEach(k => { normToCanonical[pdNorm(k)] = k; });
+    const counts = {};
+    rows.forEach(r => {
+      const raw = (getField(r) || '').toString().trim() || fallbackLabel;
+      const norm = pdNorm(raw);
+      const canonical = normToCanonical[norm] || raw;
+      counts[canonical] = (counts[canonical] || 0) + 1;
+    });
+    return Object.entries(counts).sort((a, b) => b[1] - a[1])
+      .map(([label, count]) => ({ label, count, color: colorMap[label] || 'var(--text-muted)' }));
+  }
+
+  const statusSegs = pdGroupByNormalized(rows, r => r.status, STATUS_COLORS, 'Unknown');
   renderBar('summ_status_bar', 'summ_status_legend', statusSegs);
 
   const PW_COLORS = {
@@ -5586,16 +6009,15 @@ function pdRenderSummary() {
     'Div-Finance': 'var(--accent-green)', 'Div-Planning': '#8b5cf6',
     'HQ-SWR': 'var(--accent-gold)', 'Vendor': '#f97316', 'Holdings': '#14b8a6',
   };
-  const pwCounts = {};
-  rows.forEach(r => { const pw = r.pending_with || 'Not Set'; pwCounts[pw] = (pwCounts[pw] || 0) + 1; });
-  const pwSegs = Object.entries(pwCounts).sort((a, b) => b[1] - a[1])
-    .map(([pw, c]) => ({ label: pw, count: c, color: PW_COLORS[pw] || 'var(--text-muted)' }));
+  const pwSegs = pdGroupByNormalized(rows, r => r.pending_with, PW_COLORS, 'Not Set');
   renderBar('summ_pending_bar', 'summ_pending_legend', pwSegs);
 
   const totalVetted    = rows.reduce((s, r) => s + (parseFloat(r.vetted_cost) || 0), 0);
-  const billsPassed    = rows.filter(r => ['Bill Passed', 'Process Over', 'Work Completed'].includes(r.status))
+  // Fixed: normalized, same reasoning as the badge/bar grouping above.
+  const BILLS_PASSED_STATUSES = new Set(['bill passed', 'process over', 'work completed']);
+  const billsPassed    = rows.filter(r => BILLS_PASSED_STATUSES.has(pdNorm(r.status)))
                               .reduce((s, r) => s + (parseFloat(r.total_bills) || 0), 0);
-  const billsSubmitted = rows.filter(r => r.status === 'Bill Submitted')
+  const billsSubmitted = rows.filter(r => pdNorm(r.status) === 'bill submitted')
                               .reduce((s, r) => s + (parseFloat(r.total_bills) || 0), 0);
   const yetToReceive   = Math.max(0, totalVetted - billsPassed - billsSubmitted);
   const fmt = v => v >= 10000000 ? `Rs.${(v / 10000000).toFixed(2)}Cr` : v >= 100000 ? `Rs.${(v / 100000).toFixed(2)}L` : `Rs.${Math.round(v).toLocaleString('en-IN')}`;
