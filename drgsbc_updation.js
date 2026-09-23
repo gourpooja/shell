@@ -3897,8 +3897,37 @@ function siCalcStatus(subItem, procDetail, billDetail) {
     });
     const fieldVal = f => flat[pdNorm(f)] || '';
 
+    // Secondary condition evaluator — reads process_tat.trigger_condition
+    // (optional column added to support tat_id=6 Work Completed requiring
+    // bill_description to contain 'FINAL'). null/empty = always passes.
+    // Format: 'contains:VALUE|field_name'  → field_name must contain VALUE
+    //         'equals:VALUE|field_name'     → field_name must equal VALUE
+    //         'contains:VALUE'              → trigger_field itself must contain VALUE
+    const meetsCondition = (tatRow) => {
+      const cond = tatRow.trigger_condition;
+      if (!cond) return true;
+      const colonIdx = cond.indexOf(':');
+      if (colonIdx < 0) return true;
+      const type  = cond.slice(0, colonIdx).trim().toLowerCase();
+      const rest  = cond.slice(colonIdx + 1).trim().toLowerCase();
+      let checkField = tatRow.trigger_field;
+      let checkValue = rest;
+      if (rest.includes('|')) {
+        const pipeIdx = rest.indexOf('|');
+        checkValue = rest.slice(0, pipeIdx).trim();
+        checkField = rest.slice(pipeIdx + 1).trim();
+      }
+      const fv = String(fieldVal(checkField) || '').toLowerCase();
+      if (type === 'contains') return fv.includes(checkValue);
+      if (type === 'equals')   return fv === checkValue;
+      if (type === 'notempty') return fv.length > 0;
+      if (type === 'empty')    return fv.length === 0;
+      return true;
+    };
+
     // For each unique status (lowest priority row = the row whose trigger_field
-    // unlocks that status), collect statuses whose trigger is filled.
+    // unlocks that status), collect statuses whose trigger is filled AND
+    // whose optional trigger_condition is also satisfied.
     // The candidate with the lowest priority number = the most advanced milestone.
     const terminals = new Set(['on hold', 'dropped']);
     const candidates = [];
@@ -3910,7 +3939,7 @@ function siCalcStatus(subItem, procDetail, billDetail) {
       const sKey = pdNorm(s);
       if (!s || terminals.has(sKey) || seenStatus.has(sKey)) continue;
       seenStatus.add(sKey);
-      if (fieldVal(row.trigger_field)) {
+      if (fieldVal(row.trigger_field) && meetsCondition(row)) {
         candidates.push({ status: s, priority: parseInt(row.priority, 10) });
       }
     }
