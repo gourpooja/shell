@@ -290,20 +290,26 @@ async function loadSidebar() {
   try {
     loading(true);
 
-    // My reports
+    // My reports — filter on owner_username (DB column), select both
+    // DB names and alias names so either works in renderSidebarSection
     const mine = await nxFetch(
-      `${TABLE}?created_by=eq.${encodeURIComponent(username)}&order=updated_at.desc&select=id,name,share_type,updated_at`
+      `${TABLE}?owner_username=eq.${encodeURIComponent(username)}&order=updated_at.desc` +
+      `&select=id,report_id,name,report_name,share_type,updated_at,created_by,owner_username`
     ).catch(() => []);
     renderSidebarSection('myReportsList', mine || [], false);
 
     // Shared with me: share_type=all, or my username in shared_with_users, or my team in shared_with_teams
     const team = _session.profile?.team || '';
-    let sharedQuery = `${TABLE}?created_by=neq.${encodeURIComponent(username)}&order=updated_at.desc&select=id,name,share_type,created_by,updated_at`;
-    const shared = await nxFetch(sharedQuery).catch(() => []);
+    const shared = await nxFetch(
+      `${TABLE}?owner_username=neq.${encodeURIComponent(username)}&order=updated_at.desc` +
+      `&select=id,report_id,name,report_name,share_type,created_by,owner_username,shared_users,shared_teams,shared_with_users,shared_with_teams,updated_at`
+    ).catch(() => []);
     const visibleShared = (shared || []).filter(r => {
       if (r.share_type === 'all') return true;
-      if (r.share_type === 'users' && Array.isArray(r.shared_with_users) && r.shared_with_users.includes(username)) return true;
-      if (r.share_type === 'teams' && team && Array.isArray(r.shared_with_teams) && r.shared_with_teams.includes(team)) return true;
+      const su = r.shared_users || r.shared_with_users || [];
+      const st = r.shared_teams || r.shared_with_teams || [];
+      if (r.share_type === 'users' && Array.isArray(su) && su.includes(username)) return true;
+      if (r.share_type === 'teams' && team && Array.isArray(st) && st.includes(team)) return true;
       return false;
     });
     renderSidebarSection('sharedReportsList', visibleShared, true);
@@ -322,13 +328,18 @@ function renderSidebarSection(elId, reports, isShared) {
     return;
   }
   el.innerHTML = reports.map(r => {
+    // Support both alias column names (id, name, created_by) and real
+    // DB column names (report_id, report_name, owner_username)
+    const rId    = r.id || r.report_id;
+    const rName  = r.name || r.report_name || 'Untitled';
+    const rOwner = r.created_by || r.owner_username || '';
     let badge = '';
     if (r.share_type === 'all')   badge = `<span class="rp-share-badge rsb-all">ALL</span>`;
     if (r.share_type === 'teams') badge = `<span class="rp-share-badge rsb-teams">TEAM</span>`;
     if (r.share_type === 'users') badge = `<span class="rp-share-badge rsb-users">SHARED</span>`;
-    const owner = isShared ? `<span class="rp-share-badge" style="color:var(--text-muted);border-color:rgba(100,100,120,.3);">${(r.created_by||'').toUpperCase()}</span>` : '';
-    return `<div class="rp-report-item" data-id="${r.id}" data-shared="${isShared}">
-      <span class="rp-report-name" title="${r.name}">${r.name}</span>
+    const owner = isShared ? `<span class="rp-share-badge" style="color:var(--text-muted);border-color:rgba(100,100,120,.3);">${rOwner.toUpperCase()}</span>` : '';
+    return `<div class="rp-report-item" data-id="${rId}" data-shared="${isShared}">
+      <span class="rp-report-name" title="${rName}">${rName}</span>
       ${owner}${badge}
     </div>`;
   }).join('');
@@ -403,13 +414,13 @@ async function loadReport(id, isShared) {
     const r = rows[0];
 
     resetState();
-    S.reportId = r.id;
+    S.reportId = r.id || r.report_id;
     S.shareType = r.share_type || 'none';
-    S.sharedWithUsers = r.shared_with_users || [];
-    S.sharedWithTeams = r.shared_with_teams || [];
+    S.sharedWithUsers = r.shared_with_users || r.shared_users || [];
+    S.sharedWithTeams = r.shared_with_teams || r.shared_teams || [];
 
     const username = _session.profile?.username || _session.user;
-    const ownerOfRecord = r.created_by === username;
+    const ownerOfRecord = (r.created_by || r.owner_username) === username;
     setOwnerMode(ownerOfRecord);
 
     if (checkCanDelete() && !ownerOfRecord) {
@@ -423,10 +434,12 @@ async function loadReport(id, isShared) {
     const def = typeof r.definition === 'string' ? JSON.parse(r.definition) : r.definition;
     populateFromDefinition(def);
 
-    document.getElementById('rpNameInput').value = r.name || 'Untitled';
-    document.getElementById('rpPrintTitle').textContent = r.name || 'Untitled';
+    const rName = r.name || r.report_name || 'Untitled';
+    document.getElementById('rpNameInput').value = rName;
+    document.getElementById('rpPrintTitle').textContent = rName;
+    const rOwner = r.created_by || r.owner_username || '';
     if (!ownerOfRecord) {
-      document.getElementById('rpOwnerHint').textContent = `BY ${(r.created_by||'').toUpperCase()}`;
+      document.getElementById('rpOwnerHint').textContent = `BY ${rOwner.toUpperCase()}`;
     } else {
       document.getElementById('rpOwnerHint').textContent = '';
     }
@@ -1118,11 +1131,15 @@ async function saveReport() {
   const username   = _session.profile?.username || _session.user;
   const payload = {
     name,
+    report_name:       name,              // DB column name
+    owner_username:    username,          // DB NOT NULL column
+    created_by:        username,
     definition,
-    created_by: username,
-    share_type: S.shareType,
+    share_type:        S.shareType,
     shared_with_users: S.sharedWithUsers,
     shared_with_teams: S.sharedWithTeams,
+    shared_users:      S.sharedWithUsers, // DB column name
+    shared_teams:      S.sharedWithTeams, // DB column name
     updated_at: new Date().toISOString(),
   };
 
@@ -1144,7 +1161,7 @@ async function saveReport() {
         prefer: 'return=representation',
       });
       if (res && res[0]) {
-        S.reportId = res[0].id;
+        S.reportId = res[0].id || res[0].report_id;
         document.getElementById('btnDeleteReport').style.display = '';
       }
       toast('REPORT CREATED');
@@ -1180,11 +1197,15 @@ async function copyAsMine() {
   const username = _session.profile?.username || _session.user;
   const payload = {
     name: `${name} (Copy)`,
-    definition: buildDefinition(),
-    created_by: username,
-    share_type: 'none',
+    report_name:       `${name} (Copy)`,
+    owner_username:    username,
+    created_by:        username,
+    definition:        buildDefinition(),
+    share_type:        'none',
     shared_with_users: [],
     shared_with_teams: [],
+    shared_users:      [],
+    shared_teams:      [],
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
   };
@@ -1196,7 +1217,7 @@ async function copyAsMine() {
       prefer: 'return=representation',
     });
     if (res && res[0]) {
-      S.reportId = res[0].id;
+      S.reportId = res[0].id || res[0].report_id;
       setOwnerMode(true);
       document.getElementById('rpNameInput').value = payload.name;
       document.getElementById('btnDeleteReport').style.display = '';
@@ -1286,9 +1307,11 @@ async function applyShare() {
       await nxFetch(`${TABLE}?id=eq.${S.reportId}`, {
         method: 'PATCH',
         body: {
-          share_type: S.shareType,
+          share_type:        S.shareType,
           shared_with_users: S.sharedWithUsers,
           shared_with_teams: S.sharedWithTeams,
+          shared_users:      S.sharedWithUsers, // DB column
+          shared_teams:      S.sharedWithTeams, // DB column
           updated_at: new Date().toISOString(),
         },
         prefer: 'return=representation',
