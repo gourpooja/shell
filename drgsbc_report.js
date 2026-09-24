@@ -1128,18 +1128,31 @@ async function saveReport() {
   if (!name) { toast('Enter a report name', 'info'); return; }
 
   const definition = buildDefinition();
-  const username   = _session.profile?.username || _session.user;
+
+  // Belt-and-suspenders username resolution — tries every possible
+  // path the session object might carry the username under, then
+  // falls back to the user display name, then 'unknown'. This is
+  // resilient to minor shape differences between services.js versions.
+  const username = (
+    _session?.profile?.username     ||
+    _session?.profile?.userId       ||
+    _session?.user                  ||
+    sessionStorage.getItem('drgsbc_profile') && JSON.parse(sessionStorage.getItem('drgsbc_profile') || '{}').username ||
+    sessionStorage.getItem('drgsbc_user')    ||
+    'unknown'
+  );
+
   const payload = {
     name,
-    report_name:       name,              // DB column name
-    owner_username:    username,          // DB NOT NULL column
+    report_name:       name,
+    owner_username:    username,
     created_by:        username,
     definition,
     share_type:        S.shareType,
     shared_with_users: S.sharedWithUsers,
     shared_with_teams: S.sharedWithTeams,
-    shared_users:      S.sharedWithUsers, // DB column name
-    shared_teams:      S.sharedWithTeams, // DB column name
+    shared_users:      S.sharedWithUsers,
+    shared_teams:      S.sharedWithTeams,
     updated_at: new Date().toISOString(),
   };
 
@@ -1194,7 +1207,13 @@ function buildDefinition() {
 
 async function copyAsMine() {
   const name = (document.getElementById('rpNameInput').value || 'Untitled Report').trim();
-  const username = _session.profile?.username || _session.user;
+  const username = (
+    _session?.profile?.username  ||
+    _session?.user               ||
+    sessionStorage.getItem('drgsbc_profile') && JSON.parse(sessionStorage.getItem('drgsbc_profile') || '{}').username ||
+    sessionStorage.getItem('drgsbc_user') ||
+    'unknown'
+  );
   const payload = {
     name: `${name} (Copy)`,
     report_name:       `${name} (Copy)`,
