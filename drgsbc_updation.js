@@ -3676,7 +3676,7 @@ async function clOnTabOpen() {
 const PD_TOGGLE_COLS = ['remarks', 'stage', 'unitprice', 'depot', 'nextdue', 'ownersse', 'processpdc', 'manualpdc', 'pendingwith', 'status'];
 const PD_TOGGLE_GROUPS = {
   indent: ['indentno', 'indentdate', 'tendercalledon', 'tenderopenedon'],
-  loapo:  ['vendorname', 'loaponumber', 'loapodate'],
+  loapo:  ['vendorname', 'loaponumber', 'loapodate', 'deliveryduedate', 'baseprice', 'taxandothers', 'unitpricecalc', 'totalvaluecalc'],
   inward: ['deliverydate', 'commissioningdate', 'ptcdate', 'crnno', 'crndate'],
 };
 // Pending With used to be mandatory (always shown, no toggle at all).
@@ -4245,6 +4245,7 @@ const PD = {
   existBill: {}, // sub_item_id -> array of existing bill_detail rows, populated by pdFetchData
   dirtyProc: {}, // sub_item_id -> { field: value } of unsaved Procurement edits
   dirtyBill: {}, // sub_item_id -> { field: value } of unsaved Billing edits
+  dirtySI:   {}, // sub_item_id -> { field: value } of unsaved sanction_sub_item edits (base_price, tax_and_others)
   sharedScrollTop: 0, // vertical scroll position, carried over between Procurement <-> Billing
   sortField: null, // Procurement grid column sort — e.g. 'indent_number', 'loa_po_number'
   sortAsc: true,
@@ -4646,7 +4647,7 @@ function pdResetFilters() {
   document.getElementById('pd_f_subitem').value = '';
   document.getElementById('pd_fetch_status').textContent = '';
   document.getElementById('pd_bottom_section').style.display = 'none';
-  PD.allRows = []; PD.filteredRows = []; PD.dirtyProc = {}; PD.dirtyBill = {}; PD.sharedScrollTop = 0;
+  PD.allRows = []; PD.filteredRows = []; PD.dirtyProc = {}; PD.dirtyBill = {}; PD.dirtySI = {}; PD.sharedScrollTop = 0;
   document.getElementById('pd_dirty_badge').style.display = 'none';
   document.getElementById('pd_discard_btn').style.display = 'none';
   document.getElementById('pd_save_all_btn2').style.display = 'none';
@@ -4708,7 +4709,7 @@ function pdMarkDirty(table, subItemId, field, value, el) {
     const found = document.querySelector(`[data-field='${field}'][data-sid='${subItemId}']`);
     if (found) setFieldState(found, 'dirty');
   }
-  const hasDirty = Object.keys(PD.dirtyProc).length > 0 || Object.keys(PD.dirtyBill).length > 0;
+  const hasDirty = Object.keys(PD.dirtyProc).length > 0 || Object.keys(PD.dirtyBill).length > 0 || Object.keys(PD.dirtySI).length > 0;
   document.getElementById('pd_dirty_badge').style.display = hasDirty ? '' : 'none';
   document.getElementById('pd_discard_btn').style.display  = hasDirty ? '' : 'none';
   document.getElementById('pd_save_all_btn2').style.display = hasDirty ? '' : 'none';
@@ -4724,6 +4725,38 @@ function pdMarkDirty(table, subItemId, field, value, el) {
   if (table === 'proc' && (field === 'indent_number' || field === 'indent_date')) {
     pdRefreshIndentIcon(subItemId);
   }
+}
+
+// Marks a sanction_sub_item field as dirty, recalculates unit_price
+// and total_value live, and updates the computed read-only cells.
+function pdMarkDirtySI(subItemId, field, value, el) {
+  if (!PD.dirtySI[subItemId]) PD.dirtySI[subItemId] = {};
+  PD.dirtySI[subItemId][field] = (value === '' || value === undefined) ? null : parseFloat(value) || 0;
+  if (el) setFieldState(el, 'dirty');
+
+  // Recalculate unit_price and total_value live
+  const row = PD.allRows.find(r => String(r.sub_item_id) === String(subItemId));
+  if (!row) return;
+  const si   = PD.dirtySI[subItemId] || {};
+  const base = si.base_price     !== undefined ? si.base_price     : (row.base_price     || 0);
+  const tax  = si.tax_and_others !== undefined ? si.tax_and_others : (row.tax_and_others || 0);
+  const qty  = row.qty || 1;
+  const up   = parseFloat(base) + parseFloat(tax);
+  const tv   = up * parseFloat(qty);
+
+  // Update computed display cells in the same row
+  const rowEl = document.querySelector(`tr[data-sid="${subItemId}"]`);
+  if (rowEl) {
+    const upEl = rowEl.querySelector('[data-si-calc="unit_price"]');
+    const tvEl = rowEl.querySelector('[data-si-calc="total_value"]');
+    if (upEl) upEl.textContent = up.toLocaleString('en-IN', { maximumFractionDigits: 2 });
+    if (tvEl) tvEl.textContent = tv.toLocaleString('en-IN', { maximumFractionDigits: 2 });
+  }
+
+  const hasDirty = Object.keys(PD.dirtyProc).length > 0 || Object.keys(PD.dirtyBill).length > 0 || Object.keys(PD.dirtySI).length > 0;
+  document.getElementById('pd_dirty_badge').style.display = hasDirty ? '' : 'none';
+  document.getElementById('pd_discard_btn').style.display  = hasDirty ? '' : 'none';
+  document.getElementById('pd_save_all_btn2').style.display = hasDirty ? '' : 'none';
 }
 
 function pdValidateDateSequence(row, dirtyProc, dirtyBill) {
@@ -4984,9 +5017,11 @@ function pdRenderProcTable() {
     return;
   }
   tbody.innerHTML = PD.filteredRows.map((r, i) => {
-    const dirty = PD.dirtyProc[r.sub_item_id] || {};
-    const v  = (field) => dirty[field] !== undefined ? dirty[field] : (r[field] || '');
-    const dc = (field) => dirty[field] !== undefined ? ' dirty' : '';
+    const dirty   = PD.dirtyProc[r.sub_item_id] || {};
+    const dirtySI = PD.dirtySI[r.sub_item_id] || {};
+    const v   = (field) => dirty[field]   !== undefined ? dirty[field]   : (r[field] || '');
+    const vsi = (field) => dirtySI[field] !== undefined ? dirtySI[field] : (r[field] || '');
+    const dc  = (field) => dirty[field]   !== undefined ? ' dirty' : '';
     const sid = r.sub_item_id;
     return `<tr data-sid="${sid}">
       <td class="pd-ro muted pd-frozen" data-col="slno">${i + 1}</td>
@@ -5029,6 +5064,19 @@ function pdRenderProcTable() {
         </div>
       </td>
       <td class="pd-cell edit pd-grp" data-grp="loapo" data-col="loapodate"><input class="pd-inp${dc('loa_po_date')}" type="date" data-sid="${sid}" data-field="loa_po_date" value="${v('loa_po_date')}" title="Cannot be before Indent Date"></td>
+      <td class="pd-cell edit pd-grp" data-grp="loapo" data-col="deliveryduedate"><input class="pd-inp${dc('delivery_due_on')}" type="date" data-sid="${sid}" data-field="delivery_due_on" value="${v('delivery_due_on')}" title="Delivery due on (from LOA/PO)"></td>
+      <td class="pd-cell edit pd-grp" data-grp="loapo" data-col="baseprice">
+        <input class="pd-inp${vsi('base_price') ? ' field-dirty' : ''}" type="number" step="0.01" data-sid="${sid}" data-field-si="base_price" value="${vsi('base_price') || r.base_price || ''}" placeholder="0.00" style="width:100px;" title="Base price per unit (updates total value)">
+      </td>
+      <td class="pd-cell edit pd-grp" data-grp="loapo" data-col="taxandothers">
+        <input class="pd-inp${vsi('tax_and_others') ? ' field-dirty' : ''}" type="number" step="0.01" data-sid="${sid}" data-field-si="tax_and_others" value="${vsi('tax_and_others') || r.tax_and_others || ''}" placeholder="0.00" style="width:100px;" title="Tax & others per unit (updates total value)">
+      </td>
+      <td class="pd-cell pd-grp" data-grp="loapo" data-col="unitpricecalc" style="text-align:right;font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--accent-green);">
+        <span data-si-calc="unit_price" data-sid="${sid}">${((r.base_price||0) + (r.tax_and_others||0)).toLocaleString('en-IN', {maximumFractionDigits:2})}</span>
+      </td>
+      <td class="pd-cell pd-grp" data-grp="loapo" data-col="totalvaluecalc" style="text-align:right;font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--accent-gold);">
+        <span data-si-calc="total_value" data-sid="${sid}">${(((r.base_price||0) + (r.tax_and_others||0)) * (r.qty||1)).toLocaleString('en-IN', {maximumFractionDigits:2})}</span>
+      </td>
       <td class="pd-cell edit pd-grp" data-grp="inward" data-col="deliverydate"><input class="pd-inp${dc('delivery_date')}" type="date" data-sid="${sid}" data-field="delivery_date" value="${v('delivery_date')}" title="Cannot be before LOA/PO Date"></td>
       <td class="pd-cell edit pd-grp" data-grp="inward" data-col="commissioningdate"><input class="pd-inp${dc('commissioning_date')}" type="date" data-sid="${sid}" data-field="commissioning_date" value="${v('commissioning_date')}" title="Date of commissioning"></td>
       <td class="pd-cell edit pd-grp" data-grp="inward" data-col="ptcdate"><input class="pd-inp${dc('ptc_date')}" type="date" data-sid="${sid}" data-field="ptc_date" value="${v('ptc_date')}" title="Provisional Test Certificate date"></td>
@@ -5062,8 +5110,16 @@ const PD_DATE_FIELDS = new Set([
 // into a single check after typing settles.
 document.getElementById('pd_proc_body').addEventListener('change', (e) => {
   const el = e.target;
-  const sid = el.dataset.sid;
+  const sid   = el.dataset.sid;
   const field = el.dataset.field;
+  const siField = el.dataset.fieldSi;
+
+  // SI fields (base_price, tax_and_others) → separate dirtySI store
+  if (sid && siField) {
+    pdMarkDirtySI(sid, siField, el.value, el);
+    return;
+  }
+
   if (!sid || !field) return;
 
   if (field === 'process_stage') {
@@ -5422,21 +5478,55 @@ async function pdSaveAll() {
       }
     }
 
-    const errTotal = procErr + billErr;
+    // ── Sub-item cost saves (base_price, tax_and_others → unit_price, total_value)
+    // PATCHes sanction_sub_item directly — separate from process_detail.
+    let siSaved = 0, siErr = 0;
+    for (const [subItemId, changes] of Object.entries(PD.dirtySI)) {
+      try {
+        const row = PD.allRows.find(r => String(r.sub_item_id) === String(subItemId));
+        // Compute derived fields so DB stays consistent
+        const base = changes.base_price     !== undefined ? changes.base_price     : (row?.base_price     || 0);
+        const tax  = changes.tax_and_others !== undefined ? changes.tax_and_others : (row?.tax_and_others || 0);
+        const qty  = row?.qty || row?.sub_qty || 1;
+        const up   = parseFloat(base) + parseFloat(tax);
+        const tv   = up * parseFloat(qty);
+        const siPayload = {
+          ...changes,
+          unit_price:  up,
+          total_value: tv,
+          updated_at:  new Date().toISOString(),
+        };
+        await nxFetch(`sanction_sub_item?sub_item_id=eq.${subItemId}`,
+          { method: 'PATCH', body: siPayload, prefer: 'return=minimal' });
+        const idx = PD.allRows.findIndex(r => String(r.sub_item_id) === String(subItemId));
+        if (idx >= 0) Object.assign(PD.allRows[idx], siPayload);
+        // Update the computed display cells to confirmed values
+        const rowEl = document.querySelector(`tr[data-sid="${subItemId}"]`);
+        if (rowEl) {
+          const upEl = rowEl.querySelector('[data-si-calc="unit_price"]');
+          const tvEl = rowEl.querySelector('[data-si-calc="total_value"]');
+          if (upEl) { upEl.textContent = up.toLocaleString('en-IN', { maximumFractionDigits: 2 }); upEl.style.color = 'var(--accent-green)'; }
+          if (tvEl) { tvEl.textContent = tv.toLocaleString('en-IN', { maximumFractionDigits: 2 }); tvEl.style.color = 'var(--accent-gold)'; }
+        }
+        siSaved++;
+      } catch (e) {
+        console.error('si cost save', subItemId, e); siErr++;
+      }
+    }
     if (errTotal === 0) {
       // Auto-derive and save sanction_sub_item.status from the dates
       // just written, same as v16 — now via the shared helper above,
       // so this and the Billing modal's save/reject flows can never
       // drift apart again.
-      const savedSubIds = new Set([...Object.keys(PD.dirtyProc), ...Object.keys(PD.dirtyBill)]);
+      const savedSubIds = new Set([...Object.keys(PD.dirtyProc), ...Object.keys(PD.dirtyBill), ...Object.keys(PD.dirtySI)]);
       for (const subItemId of savedSubIds) {
         await pdRecalcStatusAndStageForSubItem(subItemId);
       }
 
       msgEl.style.color = 'var(--accent-green)';
-      msgEl.textContent = `✓ ${procSaved} PROCUREMENT + ${billSaved} BILLING RECORD(S) SAVED TO NEXUS`;
-      showToast(`SAVED: ${procSaved + billSaved} RECORDS → NEXUS`);
-      PD.dirtyProc = {}; PD.dirtyBill = {};
+      msgEl.textContent = `✓ ${procSaved} PROCUREMENT + ${billSaved} BILLING + ${siSaved} PO COST RECORD(S) SAVED TO NEXUS`;
+      showToast(`SAVED: ${procSaved + billSaved + siSaved} RECORDS → NEXUS`);
+      PD.dirtyProc = {}; PD.dirtyBill = {}; PD.dirtySI = {};
       document.getElementById('pd_dirty_badge').style.display = 'none';
 
       // Capture scroll position of the procurement table panel before re-fetch
@@ -5469,14 +5559,16 @@ async function pdSaveAll() {
 }
 
 function pdResetDirty() {
-  PD.dirtyProc = {}; PD.dirtyBill = {};
+  PD.dirtyProc = {}; PD.dirtyBill = {}; PD.dirtySI = {};
   document.getElementById('pd_dirty_badge').style.display = 'none';
   pdApplyFilters();
   showToast('CHANGES DISCARDED');
 }
 
 function pdHasUnsavedChanges() {
-  return Object.keys(PD.dirtyProc || {}).length > 0 || Object.keys(PD.dirtyBill || {}).length > 0;
+  return Object.keys(PD.dirtyProc || {}).length > 0 ||
+         Object.keys(PD.dirtyBill || {}).length > 0 ||
+         Object.keys(PD.dirtySI   || {}).length > 0;
 }
 
 document.getElementById('pd_save_all_btn2').addEventListener('click', pdSaveAll);
