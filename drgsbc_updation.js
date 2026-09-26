@@ -3675,9 +3675,10 @@ async function clOnTabOpen() {
    ================================================================ */
 const PD_TOGGLE_COLS = ['remarks', 'stage', 'unitprice', 'depot', 'nextdue', 'ownersse', 'processpdc', 'manualpdc', 'pendingwith', 'status'];
 const PD_TOGGLE_GROUPS = {
-  indent: ['indentno', 'indentdate', 'tendercalledon', 'tenderopenedon'],
-  loapo:  ['vendorname', 'loaponumber', 'loapodate', 'deliveryduedate', 'baseprice', 'taxandothers', 'unitpricecalc', 'totalvaluecalc'],
-  inward: ['deliverydate', 'commissioningdate', 'ptcdate', 'crnno', 'crndate'],
+  indent:      ['indentno', 'indentdate', 'tendercalledon', 'tenderopenedon'],
+  loapo:       ['vendorname', 'loaponumber', 'loapodate', 'deliveryduedate'],
+  updatecost:  ['baseprice', 'taxandothers', 'unitpricecalc', 'totalvaluecalc'],
+  inward:      ['deliverydate', 'commissioningdate', 'ptcdate', 'crnno', 'crndate'],
 };
 // Pending With used to be mandatory (always shown, no toggle at all).
 // Now that it's a genuine PD_TOGGLE_COLS entry, a person who's never
@@ -5065,16 +5066,16 @@ function pdRenderProcTable() {
       </td>
       <td class="pd-cell edit pd-grp" data-grp="loapo" data-col="loapodate"><input class="pd-inp${dc('loa_po_date')}" type="date" data-sid="${sid}" data-field="loa_po_date" value="${v('loa_po_date')}" title="Cannot be before Indent Date"></td>
       <td class="pd-cell edit pd-grp" data-grp="loapo" data-col="deliveryduedate"><input class="pd-inp${dc('delivery_due_on')}" type="date" data-sid="${sid}" data-field="delivery_due_on" value="${v('delivery_due_on')}" title="Delivery due on (from LOA/PO)"></td>
-      <td class="pd-cell edit pd-grp" data-grp="loapo" data-col="baseprice">
-        <input class="pd-inp${vsi('base_price') ? ' field-dirty' : ''}" type="number" step="0.01" data-sid="${sid}" data-field-si="base_price" value="${vsi('base_price') || r.base_price || ''}" placeholder="0.00" style="width:100px;" title="Base price per unit (updates total value)">
+      <td class="pd-cell edit pd-grp" data-grp="updatecost" data-col="baseprice">
+        <input class="pd-inp${vsi('base_price') ? ' field-dirty' : ''}" type="number" step="0.01" data-sid="${sid}" data-field-si="base_price" value="${vsi('base_price') || r.base_price || ''}" placeholder="0.00" style="width:110px;" title="Base price per unit (updates total value)">
       </td>
-      <td class="pd-cell edit pd-grp" data-grp="loapo" data-col="taxandothers">
-        <input class="pd-inp${vsi('tax_and_others') ? ' field-dirty' : ''}" type="number" step="0.01" data-sid="${sid}" data-field-si="tax_and_others" value="${vsi('tax_and_others') || r.tax_and_others || ''}" placeholder="0.00" style="width:100px;" title="Tax & others per unit (updates total value)">
+      <td class="pd-cell edit pd-grp" data-grp="updatecost" data-col="taxandothers">
+        <input class="pd-inp${vsi('tax_and_others') ? ' field-dirty' : ''}" type="number" step="0.01" data-sid="${sid}" data-field-si="tax_and_others" value="${vsi('tax_and_others') || r.tax_and_others || ''}" placeholder="0.00" style="width:110px;" title="Tax & others per unit (updates total value)">
       </td>
-      <td class="pd-cell pd-grp" data-grp="loapo" data-col="unitpricecalc" style="text-align:right;font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--accent-green);">
+      <td class="pd-cell pd-grp" data-grp="updatecost" data-col="unitpricecalc" style="text-align:right;font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--accent-green);">
         <span data-si-calc="unit_price" data-sid="${sid}">${((r.base_price||0) + (r.tax_and_others||0)).toLocaleString('en-IN', {maximumFractionDigits:2})}</span>
       </td>
-      <td class="pd-cell pd-grp" data-grp="loapo" data-col="totalvaluecalc" style="text-align:right;font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--accent-gold);">
+      <td class="pd-cell pd-grp" data-grp="updatecost" data-col="totalvaluecalc" style="text-align:right;font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--accent-gold);">
         <span data-si-calc="total_value" data-sid="${sid}">${(((r.base_price||0) + (r.tax_and_others||0)) * (r.qty||1)).toLocaleString('en-IN', {maximumFractionDigits:2})}</span>
       </td>
       <td class="pd-cell edit pd-grp" data-grp="inward" data-col="deliverydate"><input class="pd-inp${dc('delivery_date')}" type="date" data-sid="${sid}" data-field="delivery_date" value="${v('delivery_date')}" title="Cannot be before LOA/PO Date"></td>
