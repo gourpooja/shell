@@ -81,7 +81,19 @@ table{border-collapse:collapse;}
 .pd-inp:focus{border-color:var(--accent-blue);}
 .pd-inp.dirty{border-color:var(--accent-gold)!important;background:rgba(255,214,10,0.04);}
 .pd-inp[type=date]{min-width:130px;}
+/* Base price / tax inputs — number type needs explicit width */
+td[data-col="baseprice"] .pd-inp,
+td[data-col="taxandothers"] .pd-inp { width:110px; min-width:110px; }
 
+/* Computed cells — slightly muted since they're read-only */
+td[data-col="unitpricecalc"],
+td[data-col="totalvaluecalc"] {
+  min-width:110px;
+  font-family:'Share Tech Mono',monospace;
+  font-size:10px;
+  text-align:right;
+  white-space:nowrap;
+}
 .pd-loapo-wrap{display:flex;align-items:center;gap:4px;min-width:0;}
 .pd-loapo-wrap .pd-inp{flex:1;min-width:0;}
 .pd-loapo-doc-icon{
@@ -701,6 +713,11 @@ if (window.self !== window.top) document.documentElement.classList.add('embedded
                       <div style="display:flex;flex-direction:column;gap:9px;">
                         <label class="pd-col-toggle"><input type="checkbox" data-grp="indent"> Indent Details</label>
                         <label class="pd-col-toggle"><input type="checkbox" data-grp="loapo"> LOA/PO Details</label>
+						<label class="pd-col-toggle"><input type="checkbox" data-grp="loapo" data-col="deliveryduedate" checked>DELIVERY DUE ON</label>
+						<label class="pd-col-toggle"><input type="checkbox" data-grp="loapo" data-col="baseprice" checked>BASE PRICE</label>
+						<label class="pd-col-toggle"><input type="checkbox" data-grp="loapo" data-col="taxandothers" checked>TAX &amp; OTHERS</label>
+						<label class="pd-col-toggle"><input type="checkbox" data-grp="loapo" data-col="unitpricecalc" checked>UNIT PRICE (CALC)</label>
+						<label class="pd-col-toggle"><input type="checkbox" data-grp="loapo" data-col="totalvaluecalc" checked>TOTAL VALUE (CALC)</label>
                         <label class="pd-col-toggle"><input type="checkbox" data-grp="inward"> Inward Details</label>
                       </div>
                     </div>
@@ -762,7 +779,12 @@ if (window.self !== window.top) document.documentElement.classList.add('embedded
                     <th class="pd-th pd-edit-h pd-grp" data-grp="indent" data-col="tenderopenedon">TENDER OPENED ON</th>
                     <th class="pd-th pd-edit-h pd-grp" data-grp="loapo" data-col="vendorname">VENDOR NAME</th>
                     <th class="pd-th pd-edit-h pd-grp pd-sortable" data-grp="loapo" data-col="loaponumber" data-sort-field="loa_po_number" title="Click to sort">LOA/PO NO<span class="pd-sort-arrow" data-sort-arrow="loa_po_number"></span></th>
-                    <th class="pd-th pd-edit-h pd-grp pd-sortable" data-grp="loapo" data-col="loapodate" data-sort-field="loa_po_date" title="Click to sort">LOA/PO DATE<span class="pd-sort-arrow" data-sort-arrow="loa_po_date"></span></th>
+                    <th class="pd-th pd-edit-h pd-grp pd-sortable" data-grp="loapo" data-col="loapodate" data-sort-field="loa_po_date" title="Click to sort">LOA/PO DATE<span class="pd-sort-arrow" data-sort-arrow="loa_po_date"></span></th>				
+					<th class="pd-th pd-grp" data-grp="loapo" data-col="deliveryduedate" title="Delivery Due On (from LOA/PO)">DELIVERY DUE ON</th>
+					<th class="pd-th pd-grp" data-grp="loapo" data-col="baseprice" title="Base Price per unit — updates Total Value on save">BASE PRICE</th>
+					<th class="pd-th pd-grp" data-grp="loapo" data-col="taxandothers" title="Tax & Others per unit — updates Total Value on save">TAX & OTHERS</th>
+					<th class="pd-th pd-grp" data-grp="loapo" data-col="unitpricecalc" title="Unit Price = Base Price + Tax & Others (auto-calculated, read-only)">UNIT PRICE ⟳</th>
+					<th class="pd-th pd-grp" data-grp="loapo" data-col="totalvaluecalc"	title="Total Value = Unit Price × Qty (auto-calculated, read-only)">TOTAL VALUE ⟳</th>
                     <th class="pd-th pd-edit-h pd-grp" data-grp="inward" data-col="deliverydate">DELIVERY DATE</th>
                     <th class="pd-th pd-edit-h pd-grp" data-grp="inward" data-col="commissioningdate">COMMISSIONING DATE</th>
                     <th class="pd-th pd-edit-h pd-grp" data-grp="inward" data-col="ptcdate">PTC DATE</th>
