@@ -5276,7 +5276,8 @@ async function pdRecalcStatusAndStageForSubItem(subItemId) {
 async function pdSaveAll() {
   const hasDirtyProc = Object.keys(PD.dirtyProc).length > 0;
   const hasDirtyBill = Object.keys(PD.dirtyBill).length > 0;
-  if (!hasDirtyProc && !hasDirtyBill) { showToast('NO CHANGES TO SAVE'); return; }
+  const hasDirtySI   = Object.keys(PD.dirtySI).length   > 0;
+  if (!hasDirtyProc && !hasDirtyBill && !hasDirtySI) { showToast('NO CHANGES TO SAVE'); return; }
 
   const msgEl = document.getElementById('pd_save_msg2');
   const btn2  = document.getElementById('pd_save_all_btn2');
