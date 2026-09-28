@@ -5515,6 +5515,7 @@ async function pdSaveAll() {
         console.error('si cost save', subItemId, e); siErr++;
       }
     }
+    const errTotal = procErr + billErr + siErr;
     if (errTotal === 0) {
       // Auto-derive and save sanction_sub_item.status from the dates
       // just written, same as v16 — now via the shared helper above,
