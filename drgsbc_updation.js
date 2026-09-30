@@ -4523,7 +4523,7 @@ async function pdFetchData() {
         // so pdSaveAll()'s status/stage recalculation always read them
         // as undefined off PD.allRows — any process_tat tier keyed to
         // either trigger field could never be detected as reached.
-        'sub_item_id,sub_item_name,consignee_depot,processing_depot,qty,unit_price,vetted_cost,total_value,status,under_power,state,remarks,latest_grant,de_submit_date,de_vetted_on,' +
+        'sub_item_id,sub_item_name,consignee_depot,processing_depot,qty,base_price,tax_and_others,unit_price,vetted_cost,total_value,status,under_power,state,remarks,latest_grant,de_submit_date,de_vetted_on,' +
         'sanction_line_item!inner(' +
           'line_item_id,item_name,item_description,unit,department,' +
           'sanction_header!inner(sanction_id,under_power,plan_head,allocation_type,sanction_year,sanctioned_on)' +
@@ -4577,6 +4577,8 @@ async function pdFetchData() {
         sanction_year:    h.sanction_year   || '',
         qty:              r.qty,
         unit:             li.unit,
+        base_price:       r.base_price       ?? null,
+        tax_and_others:   r.tax_and_others   ?? null,
         unit_price:       r.unit_price || 0,
         total_value:      r.total_value,
         vetted_cost:      r.vetted_cost || 0,
